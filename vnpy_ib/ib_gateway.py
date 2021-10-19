@@ -15,7 +15,6 @@ from datetime import datetime, timedelta
 from threading import Thread, Condition
 from typing import Optional, Dict, Any, List
 import shelve
-from ibapi import contract
 from pytz import BaseTzInfo
 from tzlocal import get_localzone
 
