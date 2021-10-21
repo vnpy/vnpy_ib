@@ -71,7 +71,7 @@ STATUS_IB2VT: Dict[str, Status] = {
 
 # 多空方向映射
 DIRECTION_VT2IB: Dict[Direction, str] = {Direction.LONG: "BUY", Direction.SHORT: "SELL"}
-DIRECTION_IB2VT: Dict[str, Direction]  = {v: k for k, v in DIRECTION_VT2IB.items()}
+DIRECTION_IB2VT: Dict[str, Direction] = {v: k for k, v in DIRECTION_VT2IB.items()}
 DIRECTION_IB2VT["BOT"] = Direction.LONG
 DIRECTION_IB2VT["SLD"] = Direction.SHORT
 
@@ -270,7 +270,7 @@ class IbApi(EWrapper):
 
         self.client: EClient = EClient(self)
 
-    def connectAck(self) -> None:  # pylint: disable=invalid-name
+    def connectAck(self) -> None:
         """连接成功回报"""
         self.status = True
         self.gateway.write_log("IB TWS连接成功")
@@ -279,29 +279,29 @@ class IbApi(EWrapper):
 
         self.data_ready = False
 
-    def connectionClosed(self) -> None:  # pylint: disable=invalid-name
+    def connectionClosed(self) -> None:
         """连接断开回报"""
         self.status = False
         self.gateway.write_log("IB TWS连接断开")
 
-    def nextValidId(self, orderId: int) -> None:  # pylint: disable=invalid-name
+    def nextValidId(self, orderId: int) -> None:
         """下一个有效订单号回报"""
         super().nextValidId(orderId)
 
         if not self.orderid:
             self.orderid = orderId
 
-    def currentTime(self, time: int) -> None:  # pylint: disable=invalid-name
+    def currentTime(self, time: int) -> None:
         """IB当前服务器时间回报"""
         super().currentTime(time)
 
-        dt:datetime = datetime.fromtimestamp(time)
+        dt: datetime = datetime.fromtimestamp(time)
         time_string: str = dt.strftime("%Y-%m-%d %H:%M:%S.%f")
 
         msg: str = f"服务器时间: {time_string}"
         self.gateway.write_log(msg)
 
-    def error(self, reqId: TickerId, errorCode: int, errorString: str) -> None:  # pylint: disable=invalid-name
+    def error(self, reqId: TickerId, errorCode: int, errorString: str) -> None:
         """具体错误请求回报"""
         super().error(reqId, errorCode, errorString)
         if reqId == self.history_reqid:
@@ -323,7 +323,7 @@ class IbApi(EWrapper):
             for req in reqs:
                 self.subscribe(req)
 
-    def tickPrice(  # pylint: disable=invalid-name
+    def tickPrice(
         self, reqId: TickerId, tickType: TickType, price: float, attrib: TickAttrib
     ) -> None:
         """tick价格更新回报"""
@@ -352,7 +352,7 @@ class IbApi(EWrapper):
 
     def tickSize(
         self, reqId: TickerId, tickType: TickType, size: int
-    ) -> None:  # pylint: disable=invalid-name
+    ) -> None:
         """tick数量更新回报"""
         super().tickSize(reqId, tickType, size)
 
@@ -367,7 +367,7 @@ class IbApi(EWrapper):
 
     def tickString(
         self, reqId: TickerId, tickType: TickType, value: str
-    ) -> None:  # pylint: disable=invalid-name
+    ) -> None:
         """tick字符串更新回报"""
         super().tickString(reqId, tickType, value)
 
@@ -380,7 +380,7 @@ class IbApi(EWrapper):
 
         self.gateway.on_tick(copy(tick))
 
-    def orderStatus(  # pylint: disable=invalid-name
+    def orderStatus(
         self,
         orderId: OrderId,
         status: str,
@@ -423,7 +423,7 @@ class IbApi(EWrapper):
 
         self.gateway.on_order(copy(order))
 
-    def openOrder(  # pylint: disable=invalid-name
+    def openOrder(
         self,
         orderId: OrderId,
         ib_contract: Contract,
@@ -454,7 +454,7 @@ class IbApi(EWrapper):
         self.orders[orderid] = order
         self.gateway.on_order(copy(order))
 
-    def updateAccountValue(  # pylint: disable=invalid-name
+    def updateAccountValue(
         self, key: str, val: str, currency: str, accountName: str
     ) -> None:
         """账号更新回报"""
@@ -466,14 +466,16 @@ class IbApi(EWrapper):
         accountid: str = f"{accountName}.{currency}"
         account: AccountData = self.accounts.get(accountid, None)
         if not account:
-            account: AccountData = AccountData(accountid=accountid,
-                                  gateway_name=self.gateway_name)
+            account: AccountData = AccountData(
+                accountid=accountid,
+                gateway_name=self.gateway_name
+            )
             self.accounts[accountid] = account
 
         name: str = ACCOUNTFIELD_IB2VT[key]
         setattr(account, name, float(val))
 
-    def updatePortfolio(  # pylint: disable=invalid-name
+    def updatePortfolio(
         self,
         contract: Contract,
         position: float,
@@ -525,13 +527,13 @@ class IbApi(EWrapper):
         )
         self.gateway.on_position(pos)
 
-    def updateAccountTime(self, timeStamp: str) -> None:  # pylint: disable=invalid-name
+    def updateAccountTime(self, timeStamp: str) -> None:
         """账号更新时间回报"""
         super().updateAccountTime(timeStamp)
         for account in self.accounts.values():
             self.gateway.on_account(copy(account))
 
-    def contractDetails(self, reqId: int, contractDetails: ContractDetails) -> None:  # pylint: disable=invalid-name
+    def contractDetails(self, reqId: int, contractDetails: ContractDetails) -> None:
         """合约数据更新回报"""
         super().contractDetails(reqId, contractDetails)
 
@@ -564,7 +566,7 @@ class IbApi(EWrapper):
 
     def execDetails(
         self, reqId: int, contract: Contract, execution: Execution
-    ) -> None:  # pylint: disable=invalid-name
+    ) -> None:
         """交易数据更新回报"""
         super().execDetails(reqId, contract, execution)
 
