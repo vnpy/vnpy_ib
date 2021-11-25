@@ -114,7 +114,7 @@ PRODUCT_IB2VT: Dict[str, Product] = {
     "CMDTY": Product.SPOT,
     "FUT": Product.FUTURES,
     "OPT": Product.OPTION,
-    "FOT": Product.OPTION,
+    "FOP": Product.OPTION,
     "CONTFUT": Product.FUTURES
 }
 
