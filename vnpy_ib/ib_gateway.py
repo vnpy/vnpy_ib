@@ -168,6 +168,8 @@ class IbGateway(BaseGateway):
     vn.py用于对接IB的交易接口。
     """
 
+    default_name: str = "IB"
+
     default_setting: Dict[str, Any] = {
         "TWS地址": "127.0.0.1",
         "TWS端口": 7497,
@@ -177,7 +179,7 @@ class IbGateway(BaseGateway):
 
     exchanges: List[str] = list(EXCHANGE_VT2IB.keys())
 
-    def __init__(self, event_engine: EventEngine, gateway_name: str = "IB") -> None:
+    def __init__(self, event_engine: EventEngine, gateway_name: str) -> None:
         """构造函数"""
         super().__init__(event_engine, gateway_name)
 
