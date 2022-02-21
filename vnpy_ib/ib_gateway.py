@@ -165,7 +165,7 @@ JOIN_SYMBOL: str = "-"
 
 class IbGateway(BaseGateway):
     """
-    vn.py用于对接IB的交易接口。
+    VeighNa用于对接IB的交易接口。
     """
 
     default_name: str = "IB"
