@@ -18,6 +18,7 @@ import shelve
 from pytz import BaseTzInfo
 from tzlocal import get_localzone
 
+from vnpy.event import EventEngine
 from ibapi.client import EClient
 from ibapi.common import OrderId, TickAttrib, TickerId
 from ibapi.contract import Contract, ContractDetails
@@ -28,7 +29,6 @@ from ibapi.ticktype import TickType, TickTypeEnum
 from ibapi.wrapper import EWrapper
 from ibapi.common import BarData as IbBarData
 
-from vnpy.event import Event, EventEngine
 from vnpy.trader.gateway import BaseGateway
 from vnpy.trader.object import (
     TickData,
@@ -55,7 +55,7 @@ from vnpy.trader.constant import (
 )
 from vnpy.trader.utility import get_file_path
 from vnpy.trader.event import EVENT_TIMER
-
+from vnpy.event import Event
 
 # 委托状态映射
 STATUS_IB2VT: Dict[str, Status] = {
@@ -515,7 +515,7 @@ class IbApi(EWrapper):
         try:
             ib_size: int = int(contract.multiplier)
         except ValueError:
-            ib_size: int = 1
+            ib_size = 1
         price = averageCost / ib_size
 
         pos: PositionData = PositionData(
