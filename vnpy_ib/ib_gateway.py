@@ -115,7 +115,8 @@ PRODUCT_IB2VT: Dict[str, Product] = {
     "FUT": Product.FUTURES,
     "OPT": Product.OPTION,
     "FOP": Product.OPTION,
-    "CONTFUT": Product.FUTURES
+    "CONTFUT": Product.FUTURES,
+    "IND": Product.INDEX
 }
 
 # 期权类型映射
