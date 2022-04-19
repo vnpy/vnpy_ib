@@ -468,7 +468,7 @@ class IbApi(EWrapper):
         accountid: str = f"{accountName}.{currency}"
         account: AccountData = self.accounts.get(accountid, None)
         if not account:
-            account: AccountData = AccountData(
+            account = AccountData(
                 accountid=accountid,
                 gateway_name=self.gateway_name
             )
