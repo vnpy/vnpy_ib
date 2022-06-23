@@ -92,7 +92,7 @@ EXCHANGE_VT2IB: Dict[Exchange, str] = {
     Exchange.CME: "CME",
     Exchange.ICE: "ICE",
     Exchange.SEHK: "SEHK",
-    Exchange.SEHK: "SEHKNTL",
+    Exchange.SEHKNTL: "SEHKNTL",
     Exchange.HKFE: "HKFE",
     Exchange.CFE: "CFE",
     Exchange.TSE: "TSE",
