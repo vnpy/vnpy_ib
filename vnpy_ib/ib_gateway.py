@@ -92,10 +92,13 @@ EXCHANGE_VT2IB: Dict[Exchange, str] = {
     Exchange.CME: "CME",
     Exchange.ICE: "ICE",
     Exchange.SEHK: "SEHK",
+    Exchange.SEHK: "SEHKNTL",
     Exchange.HKFE: "HKFE",
     Exchange.CFE: "CFE",
+    Exchange.TSE: "TSE",
     Exchange.NYSE: "NYSE",
     Exchange.NASDAQ: "NASDAQ",
+    Exchange.AMEX: "AMEX",
     Exchange.ARCA: "ARCA",
     Exchange.EDGEA: "EDGEA",
     Exchange.ISLAND: "ISLAND",
@@ -125,6 +128,7 @@ OPTION_VT2IB: Dict[str, OptionType] = {OptionType.CALL: "CALL", OptionType.PUT: 
 # 货币类型映射
 CURRENCY_VT2IB: Dict[Currency, str] = {
     Currency.USD: "USD",
+    Currency.USD: "CAD",
     Currency.CNY: "CNY",
     Currency.HKD: "HKD",
 }
