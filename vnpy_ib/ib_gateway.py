@@ -15,8 +15,7 @@ from datetime import datetime, timedelta
 from threading import Thread, Condition
 from typing import Optional, Dict, Any, List
 import shelve
-from pytz import BaseTzInfo
-from tzlocal import get_localzone
+from tzlocal import get_localzone_name
 
 from vnpy.event import EventEngine
 from ibapi.client import EClient
@@ -53,7 +52,7 @@ from vnpy.trader.constant import (
     OptionType,
     Interval
 )
-from vnpy.trader.utility import get_file_path
+from vnpy.trader.utility import get_file_path, ZoneInfo
 from vnpy.trader.event import EVENT_TIMER
 from vnpy.event import Event
 
@@ -166,6 +165,7 @@ INTERVAL_VT2IB: Dict[Interval, str] = {
 }
 
 # 其他常量
+LOCAL_TZ = ZoneInfo(get_localzone_name())
 JOIN_SYMBOL: str = "-"
 
 
@@ -246,8 +246,6 @@ class IbApi(EWrapper):
 
     data_filename: str = "ib_contract_data.db"
     data_filepath: str = str(get_file_path(data_filename))
-
-    local_tz: BaseTzInfo = get_localzone()
 
     def __init__(self, gateway: IbGateway) -> None:
         """构造函数"""
@@ -355,7 +353,7 @@ class IbApi(EWrapper):
             if not tick.bid_price_1 or not tick.ask_price_1:
                 return
             tick.last_price = (tick.bid_price_1 + tick.ask_price_1) / 2
-            tick.datetime = datetime.now(self.local_tz)
+            tick.datetime = datetime.now(LOCAL_TZ)
         self.gateway.on_tick(copy(tick))
 
     def tickSize(
@@ -384,7 +382,7 @@ class IbApi(EWrapper):
 
         tick: TickData = self.ticks[reqId]
         dt: datetime = datetime.fromtimestamp(int(value))
-        tick.datetime = self.local_tz.localize(dt)
+        tick.datetime = dt.replace(tzinfo=LOCAL_TZ)
 
         self.gateway.on_tick(copy(tick))
 
@@ -579,7 +577,7 @@ class IbApi(EWrapper):
         super().execDetails(reqId, contract, execution)
 
         dt: datetime = datetime.strptime(execution.time, "%Y%m%d  %H:%M:%S")
-        dt: datetime = self.local_tz.localize(dt)
+        dt: datetime = dt.replace(tzinfo=LOCAL_TZ)
 
         trade: TradeData = TradeData(
             symbol=generate_symbol(contract),
@@ -613,7 +611,7 @@ class IbApi(EWrapper):
             dt: datetime = datetime.strptime(ib_bar.date, "%Y%m%d %H:%M:%S")
         else:
             dt: datetime = datetime.strptime(ib_bar.date, "%Y%m%d")
-        dt: datetime = self.local_tz.localize(dt)
+        dt: datetime = dt.replace(tzinfo=LOCAL_TZ)
 
         bar: BarData = BarData(
             symbol=self.history_req.symbol,
@@ -702,7 +700,7 @@ class IbApi(EWrapper):
         tick: TickData = TickData(
             symbol=req.symbol,
             exchange=req.exchange,
-            datetime=datetime.now(self.local_tz),
+            datetime=datetime.now(LOCAL_TZ),
             gateway_name=self.gateway_name,
         )
         self.ticks[self.reqid] = tick
@@ -766,7 +764,7 @@ class IbApi(EWrapper):
             end: datetime = req.end
             end_str: str = end.strftime("%Y%m%d %H:%M:%S")
         else:
-            end: datetime = datetime.now(self.local_tz)
+            end: datetime = datetime.now(LOCAL_TZ)
             end_str: str = ""
 
         delta: timedelta = end - req.start
