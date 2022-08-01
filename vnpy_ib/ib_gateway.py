@@ -599,7 +599,8 @@ class IbApi(EWrapper):
 
         if not self.account:
             for account_code in accountsList.split(","):
-                self.account = account_code
+                if account_code:
+                    self.account = account_code
 
         self.gateway.write_log(f"当前使用的交易账号为{self.account}")
         self.client.reqAccountUpdates(True, self.account)
