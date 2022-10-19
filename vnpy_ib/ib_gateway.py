@@ -626,6 +626,8 @@ class IbApi(EWrapper):
             close_price=ib_bar.close,
             gateway_name=self.gateway_name
         )
+        if bar.volume < 0:
+            bar.volume = 0
 
         self.history_buf.append(bar)
 
@@ -755,6 +757,11 @@ class IbApi(EWrapper):
 
     def query_history(self, req: HistoryRequest) -> List[BarData]:
         """查询历史数据"""
+        contract: ContractData = self.contracts[req.vt_symbol]
+        if not contract:
+            self.write_log(f"找不到合约：{req.vt_symbol}，请先订阅")
+            return []
+
         self.history_req = req
 
         self.reqid += 1
@@ -773,7 +780,7 @@ class IbApi(EWrapper):
         duration: str = f"{days} D"
         bar_size: str = INTERVAL_VT2IB[req.interval]
 
-        if req.exchange == Exchange.IDEALPRO:
+        if contract.product in [Product.SPOT, Product.FOREX]:
             bar_type: str = "MIDPOINT"
         else:
             bar_type: str = "TRADES"
