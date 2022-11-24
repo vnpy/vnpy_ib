@@ -736,6 +736,10 @@ class IbApi(EWrapper):
         ib_order.totalQuantity = req.volume
         ib_order.account = self.account
 
+        # 修复API版本升级导致的委托报错问题
+        ib_order.eTradeOnly = False
+        ib_order.firmQuoteOnly = False
+
         if req.type == OrderType.LIMIT:
             ib_order.lmtPrice = req.price
         elif req.type == OrderType.STOP:
