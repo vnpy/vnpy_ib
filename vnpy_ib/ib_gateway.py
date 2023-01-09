@@ -23,7 +23,6 @@ from ibapi.common import OrderId, TickAttrib, TickerId
 from ibapi.contract import Contract, ContractDetails
 from ibapi.execution import Execution
 from ibapi.order import Order
-from ibapi.order_state import OrderState
 from ibapi.ticktype import TickType, TickTypeEnum
 from ibapi.wrapper import EWrapper
 from ibapi.common import BarData as IbBarData
