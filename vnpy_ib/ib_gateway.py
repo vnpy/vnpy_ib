@@ -190,7 +190,9 @@ class IbGateway(BaseGateway):
         super().__init__(event_engine, gateway_name)
 
         self.api: "IbApi" = IbApi(self)
+
         self.count: int = 0
+        self.orders: Dict[str, OrderData] = {}
 
     def connect(self, setting: dict) -> None:
         """连接交易接口"""
@@ -231,6 +233,15 @@ class IbGateway(BaseGateway):
         """查询历史数据"""
         return self.api.query_history(req)
 
+    def on_order(self, order: OrderData) -> None:
+        """推送委托数据"""
+        self.orders[order.orderid] = order
+        super().on_order(order)
+
+    def get_order(self, orderid: str) -> OrderData:
+        """查询委托数据"""
+        return self.orders.get(orderid, None)
+
     def process_timer_event(self, event: Event) -> None:
         """定时事件处理"""
         self.count += 1
@@ -262,7 +273,6 @@ class IbApi(EWrapper):
         self.history_reqid: int = 0
         self.account: str = ""
         self.ticks: Dict[int, TickData] = {}
-        self.orders: Dict[str, OrderData] = {}
         self.accounts: Dict[str, AccountData] = {}
         self.contracts: Dict[str, ContractData] = {}
 
@@ -314,6 +324,12 @@ class IbApi(EWrapper):
             self.history_condition.acquire()
             self.history_condition.notify()
             self.history_condition.release()
+
+        if errorCode == 388:
+            order: OrderData = self.gateway.get_order(str(reqId))
+            if order:
+                order.status = Status.REJECTED
+                self.gateway.on_order(order)
 
         msg: str = f"信息通知，代码：{errorCode}，内容: {errorString}"
         self.gateway.write_log(msg)
@@ -415,8 +431,7 @@ class IbApi(EWrapper):
             mktCapPrice,
         )
 
-        orderid: str = str(orderId)
-        order: OrderData = self.orders.get(orderid, None)
+        order: OrderData = self.gateway.get_order(str(orderId))
         if not order:
             return
 
@@ -427,37 +442,6 @@ class IbApi(EWrapper):
         if order_status:
             order.status = order_status
 
-        self.gateway.on_order(copy(order))
-
-    def openOrder(
-        self,
-        orderId: OrderId,
-        ib_contract: Contract,
-        ib_order: Order,
-        orderState: OrderState,
-    ) -> None:
-        """新订单回报"""
-        super().openOrder(
-            orderId, ib_contract, ib_order, orderState
-        )
-
-        orderid: str = str(orderId)
-        order: OrderData = OrderData(
-            symbol=generate_symbol(ib_contract),
-            exchange=EXCHANGE_IB2VT.get(ib_contract.exchange, Exchange.SMART),
-            type=ORDERTYPE_IB2VT[ib_order.orderType],
-            orderid=orderid,
-            direction=DIRECTION_IB2VT[ib_order.action],
-            volume=ib_order.totalQuantity,
-            gateway_name=self.gateway_name,
-        )
-
-        if order.type == OrderType.LIMIT:
-            order.price = ib_order.lmtPrice
-        elif order.type == OrderType.STOP:
-            order.price = ib_order.auxPrice
-
-        self.orders[orderid] = order
         self.gateway.on_order(copy(order))
 
     def updateAccountValue(
@@ -512,7 +496,7 @@ class IbApi(EWrapper):
             exchange: Exchange = Exchange.SMART   # Use smart routing for default
 
         if not exchange:
-            msg: str = f"存在不支持的交易所持仓{generate_symbol(contract)} {contract.exchange} {contract.primaryExchange}"
+            msg: str = f"存在不支持的交易所持仓：{generate_symbol(contract)} {contract.exchange} {contract.primaryExchange}"
             self.gateway.write_log(msg)
             return
 
