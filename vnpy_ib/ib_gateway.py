@@ -310,7 +310,9 @@ class IbApi(EWrapper):
     def error(self, reqId: TickerId, errorCode: int, errorString: str) -> None:
         """具体错误请求回报"""
         super().error(reqId, errorCode, errorString)
-        if reqId == self.history_reqid:
+    
+        # 2000-2999信息通知不属于报错信息
+        if reqId == self.history_reqid and errorCode not in range(2000, 3000):
             self.history_condition.acquire()
             self.history_condition.notify()
             self.history_condition.release()
