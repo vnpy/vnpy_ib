@@ -307,10 +307,10 @@ class IbApi(EWrapper):
         msg: str = f"服务器时间: {time_string}"
         self.gateway.write_log(msg)
 
-    def error(self, reqId: TickerId, errorCode: int, errorString: str) -> None:
+    def error(self, reqId: TickerId, errorCode: int, errorString: str, advancedOrderRejectJson: str = "") -> None:
         """具体错误请求回报"""
         super().error(reqId, errorCode, errorString)
-    
+
         # 2000-2999信息通知不属于报错信息
         if reqId == self.history_reqid and errorCode not in range(2000, 3000):
             self.history_condition.acquire()
@@ -610,11 +610,19 @@ class IbApi(EWrapper):
     def historicalData(self, reqId: int, ib_bar: IbBarData) -> None:
         """历史数据更新回报"""
         # 日级别数据和周级别日期数据的数据形式为%Y%m%d
-        if len(ib_bar.date) > 8:
-            dt: datetime = datetime.strptime(ib_bar.date, "%Y%m%d %H:%M:%S")
+        if "/" in ib_bar.date:
+            timezone = ib_bar.date.split(" ")[-1]
+            time_str = ib_bar.date.replace(f" {timezone}", "")
+            tz = ZoneInfo(timezone)
         else:
-            dt: datetime = datetime.strptime(ib_bar.date, "%Y%m%d")
-        dt: datetime = dt.replace(tzinfo=LOCAL_TZ)
+            time_str = ib_bar.date
+            tz = LOCAL_TZ
+
+        if ":" in ib_bar.date:
+            dt: datetime = datetime.strptime(time_str, "%Y%m%d %H:%M:%S")
+        else:
+            dt: datetime = datetime.strptime(time_str, "%Y%m%d")
+        dt: datetime = dt.replace(tzinfo=tz)
 
         bar: BarData = BarData(
             symbol=self.history_req.symbol,
@@ -738,10 +746,6 @@ class IbApi(EWrapper):
         ib_order.totalQuantity = req.volume
         ib_order.account = self.account
 
-        # 修复API版本升级导致的委托报错问题
-        ib_order.eTradeOnly = False
-        ib_order.firmQuoteOnly = False
-
         if req.type == OrderType.LIMIT:
             ib_order.lmtPrice = req.price
         elif req.type == OrderType.STOP:
@@ -759,7 +763,7 @@ class IbApi(EWrapper):
         if not self.status:
             return
 
-        self.client.cancelOrder(int(req.orderid))
+        self.client.cancelOrder(int(req.orderid), "")
 
     def query_history(self, req: HistoryRequest) -> List[BarData]:
         """查询历史数据"""
@@ -776,10 +780,10 @@ class IbApi(EWrapper):
 
         if req.end:
             end: datetime = req.end
-            end_str: str = end.strftime("%Y%m%d %H:%M:%S")
         else:
             end: datetime = datetime.now(LOCAL_TZ)
-            end_str: str = ""
+
+        end_str: str = end.strftime("%Y%m%d %H:%M:%S") + " " + get_localzone_name()
 
         delta: timedelta = end - req.start
         days: int = min(delta.days, 180)     # IB 只提供6个月数据
