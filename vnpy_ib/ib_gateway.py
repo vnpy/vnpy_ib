@@ -14,6 +14,7 @@ from copy import copy
 from datetime import datetime, timedelta
 from threading import Thread, Condition
 from typing import Optional, Dict, Any, List
+from decimal import Decimal
 import shelve
 from tzlocal import get_localzone_name
 
@@ -359,7 +360,7 @@ class IbApi(EWrapper):
         self.gateway.on_tick(copy(tick))
 
     def tickSize(
-        self, reqId: TickerId, tickType: TickType, size: int
+        self, reqId: TickerId, tickType: TickType, size: Decimal
     ) -> None:
         """tick数量更新回报"""
         super().tickSize(reqId, tickType, size)
@@ -369,7 +370,7 @@ class IbApi(EWrapper):
 
         tick: TickData = self.ticks[reqId]
         name: str = TICKFIELD_IB2VT[tickType]
-        setattr(tick, name, size)
+        setattr(tick, name, float(size))
 
         self.gateway.on_tick(copy(tick))
 
@@ -392,8 +393,8 @@ class IbApi(EWrapper):
         self,
         orderId: OrderId,
         status: str,
-        filled: float,
-        remaining: float,
+        filled: Decimal,
+        remaining: Decimal,
         avgFillPrice: float,
         permId: int,
         parentId: int,
@@ -422,7 +423,7 @@ class IbApi(EWrapper):
         if not order:
             return
 
-        order.traded = filled
+        order.traded = float(filled)
 
         # 过滤撤单中止状态
         order_status: Status = STATUS_IB2VT.get(status, None)
@@ -486,7 +487,7 @@ class IbApi(EWrapper):
     def updatePortfolio(
         self,
         contract: Contract,
-        position: float,
+        position: Decimal,
         marketPrice: float,
         marketValue: float,
         averageCost: float,
@@ -514,7 +515,7 @@ class IbApi(EWrapper):
             exchange: Exchange = Exchange.SMART   # Use smart routing for default
 
         if not exchange:
-            msg: str = f"存在不支持的交易所持仓{generate_symbol(contract)} {contract.exchange} {contract.primaryExchange}"
+            msg: str = f"存在不支持的交易所持仓：{generate_symbol(contract)} {contract.exchange} {contract.primaryExchange}"
             self.gateway.write_log(msg)
             return
 
@@ -528,7 +529,7 @@ class IbApi(EWrapper):
             symbol=generate_symbol(contract),
             exchange=exchange,
             direction=Direction.NET,
-            volume=position,
+            volume=float(position),
             price=price,
             pnl=unrealizedPNL,
             gateway_name=self.gateway_name,
@@ -595,7 +596,7 @@ class IbApi(EWrapper):
             tradeid=str(execution.execId),
             direction=DIRECTION_IB2VT[execution.side],
             price=execution.price,
-            volume=execution.shares,
+            volume=float(execution.shares),
             datetime=dt,
             gateway_name=self.gateway_name,
         )
@@ -636,7 +637,7 @@ class IbApi(EWrapper):
             exchange=self.history_req.exchange,
             datetime=dt,
             interval=self.history_req.interval,
-            volume=ib_bar.volume,
+            volume=float(ib_bar.volume),
             open_price=ib_bar.open,
             high_price=ib_bar.high,
             low_price=ib_bar.low,
@@ -750,7 +751,7 @@ class IbApi(EWrapper):
         ib_order.clientId = self.clientid
         ib_order.action = DIRECTION_VT2IB[req.direction]
         ib_order.orderType = ORDERTYPE_VT2IB[req.type]
-        ib_order.totalQuantity = req.volume
+        ib_order.totalQuantity = Decimal(req.volume)
         ib_order.account = self.account
 
         if req.type == OrderType.LIMIT:
