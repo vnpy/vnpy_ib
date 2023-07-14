@@ -589,6 +589,9 @@ class IbApi(EWrapper):
         dt: datetime = datetime.strptime(time_str, "%Y%m%d  %H:%M:%S")
         dt: datetime = dt.replace(tzinfo=tz)
 
+        if tz != LOCAL_TZ:
+            dt = dt.astimezone(LOCAL_TZ)
+
         trade: TradeData = TradeData(
             symbol=generate_symbol(contract),
             exchange=EXCHANGE_IB2VT.get(contract.exchange, Exchange.SMART),
@@ -631,6 +634,9 @@ class IbApi(EWrapper):
         else:
             dt: datetime = datetime.strptime(time_str, "%Y%m%d")
         dt: datetime = dt.replace(tzinfo=tz)
+
+        if tz != LOCAL_TZ:
+            dt: datetime = dt.astimezone(LOCAL_TZ)
 
         bar: BarData = BarData(
             symbol=self.history_req.symbol,
