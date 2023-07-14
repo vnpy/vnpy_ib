@@ -578,8 +578,15 @@ class IbApi(EWrapper):
         """交易数据更新回报"""
         super().execDetails(reqId, contract, execution)
 
-        dt: datetime = datetime.strptime(execution.time, "%Y%m%d  %H:%M:%S")
-        dt: datetime = dt.replace(tzinfo=LOCAL_TZ)
+        if "/" in execution.time:
+            timezone = execution.time.split(" ")[-1]
+            time_str = execution.time.replace(f" {timezone}", "")
+            tz = ZoneInfo(timezone)
+        else:
+            time_str = execution.time
+            tz = LOCAL_TZ
+        dt: datetime = datetime.strptime(time_str, "%Y%m%d  %H:%M:%S")
+        dt: datetime = dt.replace(tzinfo=tz)
 
         trade: TradeData = TradeData(
             symbol=generate_symbol(contract),
