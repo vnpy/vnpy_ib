@@ -818,7 +818,7 @@ class IbApi(EWrapper):
         )
 
         self.history_condition.acquire()    # 等待异步数据返回
-        self.history_condition.wait()
+        self.history_condition.wait(60)
         self.history_condition.release()
 
         history: List[BarData] = self.history_buf
