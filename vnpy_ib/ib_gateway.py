@@ -124,7 +124,12 @@ PRODUCT_IB2VT: Dict[str, Product] = {
 }
 
 # 期权类型映射
-OPTION_IB2VT: Dict[str, OptionType] = {"C": OptionType.CALL, "P": OptionType.PUT}
+OPTION_IB2VT: Dict[str, OptionType] = {
+    "C": OptionType.CALL,
+    "CALL": OrderType.CALL,
+    "P": OptionType.PUT,
+    "PUT": OptionType.PUT
+}
 
 # 货币类型映射
 CURRENCY_VT2IB: Dict[Currency, str] = {
