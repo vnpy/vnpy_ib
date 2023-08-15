@@ -124,7 +124,7 @@ PRODUCT_IB2VT: Dict[str, Product] = {
 }
 
 # 期权类型映射
-OPTION_VT2IB: Dict[str, OptionType] = {OptionType.CALL: "CALL", OptionType.PUT: "PUT"}
+OPTION_IB2VT: Dict[str, OptionType] = {"C": OptionType.CALL, "P": OptionType.PUT}
 
 # 货币类型映射
 CURRENCY_VT2IB: Dict[Currency, str] = {
@@ -567,11 +567,37 @@ class IbApi(EWrapper):
             gateway_name=self.gateway_name,
         )
 
+        if contract.product == Product.OPTION:
+            contract.option_portfolio = ib_contract.symbol
+            contract.option_type = OPTION_IB2VT.get(ib_contract.right, None)
+            contract.option_strike = ib_contract.strike
+            contract.option_index = str(ib_contract.strike)
+            contract.option_expiry = datetime.strptime(ib_contract.lastTradeDateOrContractMonth, "%Y%m%d")
+
+            if ib_contract.secType == "FOP":
+                contract.option_underlying = contractDetails.underSymbol    # 期货期权的underSymbol都是IB Symbol
+            else:
+                contract.option_underlying = contractDetails.underSymbol + "_" + contractDetails.contractMonth
+
         if contract.vt_symbol not in self.contracts:
             self.gateway.on_contract(contract)
 
             self.contracts[contract.vt_symbol] = contract
             self.save_contract_data()
+
+        if symbol not in self.ticks:
+            # 订阅期权链tick数据并创建tick对象缓冲区（此时期权链上的合约并没有被缓存进self.subscribed字典中，若断连不会自动重新订阅）
+            self.reqid += 1
+            self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])
+
+            tick: TickData = TickData(
+                symbol=symbol,
+                exchange=contract.exchange,
+                datetime=datetime.now(LOCAL_TZ),
+                gateway_name=self.gateway_name,
+            )
+            self.ticks[self.reqid] = tick
+            self.tick_exchange[self.reqid] = contract.exchange
 
     def execDetails(
         self, reqId: int, contract: Contract, execution: Execution
@@ -696,8 +722,42 @@ class IbApi(EWrapper):
         self.status = False
         self.client.disconnect()
 
+    def query_option_portfolio(self, req: SubscribeRequest) -> None:
+        """查询期权链合约数据"""
+        # e.g. req.vt_symbol = "388-HKD-OPT.SEHK" | "AUD-USD-FOP.CME"
+        if not self.status:
+            return
+
+        if req.exchange not in EXCHANGE_VT2IB:
+            self.gateway.write_log(f"不支持的交易所{req.exchange}")
+            return
+
+        # 过滤重复订阅
+        if req.vt_symbol in self.contracts:
+            return
+
+        # 解析IB合约详情
+        try:
+            fields: list = req.symbol.split(JOIN_SYMBOL)
+
+            ib_contract: Contract = Contract()
+            ib_contract.exchange = EXCHANGE_VT2IB[req.exchange]
+            ib_contract.secType = fields[-1]
+            ib_contract.currency = fields[-2]
+            ib_contract.symbol = fields[0]
+
+        except IndexError:
+            self.gateway.write_log(f"代码解析失败，请检查格式是否正确{req.symbol}")
+            return
+
+        # 通过TWS查询合约信息
+        self.reqid += 1
+        self.client.reqContractDetails(self.reqid, ib_contract)
+
     def subscribe(self, req: SubscribeRequest) -> None:
         """订阅tick数据更新"""
+        # e.g. req.vt_symbol = "388-20230830-C-290-100-HKD-OPT.SEHK" | "AUD-20240503-C-0.54-100000-USD-FOP.CME"
+
         if not self.status:
             return
 
