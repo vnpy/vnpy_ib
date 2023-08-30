@@ -14,6 +14,7 @@ from copy import copy
 from datetime import datetime, timedelta
 from threading import Thread, Condition
 from typing import Optional, Dict, Any, List
+from decimal import Decimal
 import shelve
 from tzlocal import get_localzone_name
 
@@ -123,7 +124,12 @@ PRODUCT_IB2VT: Dict[str, Product] = {
 }
 
 # 期权类型映射
-OPTION_VT2IB: Dict[str, OptionType] = {OptionType.CALL: "CALL", OptionType.PUT: "PUT"}
+OPTION_IB2VT: Dict[str, OptionType] = {
+    "C": OptionType.CALL,
+    "CALL": OptionType.CALL,
+    "P": OptionType.PUT,
+    "PUT": OptionType.PUT
+}
 
 # 货币类型映射
 CURRENCY_VT2IB: Dict[Currency, str] = {
@@ -260,11 +266,13 @@ class IbApi(EWrapper):
         self.orderid: int = 0
         self.clientid: int = 0
         self.history_reqid: int = 0
+        self.fop_reqid: int = 0
         self.account: str = ""
         self.ticks: Dict[int, TickData] = {}
         self.orders: Dict[str, OrderData] = {}
         self.accounts: Dict[str, AccountData] = {}
         self.contracts: Dict[str, ContractData] = {}
+        self.tickids: Dict[str, int] = {}
 
         self.tick_exchange: Dict[int, Exchange] = {}
         self.subscribed: Dict[str, SubscribeRequest] = {}
@@ -273,6 +281,9 @@ class IbApi(EWrapper):
         self.history_req: HistoryRequest = None
         self.history_condition: Condition = Condition()
         self.history_buf: List[BarData] = []
+
+        self.futcontract_condition: Condition = Condition()
+        self.ib_localsymbol_map: Dict[str, str] = {}
 
         self.client: EClient = EClient(self)
 
@@ -307,10 +318,10 @@ class IbApi(EWrapper):
         msg: str = f"服务器时间: {time_string}"
         self.gateway.write_log(msg)
 
-    def error(self, reqId: TickerId, errorCode: int, errorString: str) -> None:
+    def error(self, reqId: TickerId, errorCode: int, errorString: str, advancedOrderRejectJson: str = "") -> None:
         """具体错误请求回报"""
         super().error(reqId, errorCode, errorString)
-    
+
         # 2000-2999信息通知不属于报错信息
         if reqId == self.history_reqid and errorCode not in range(2000, 3000):
             self.history_condition.acquire()
@@ -359,7 +370,7 @@ class IbApi(EWrapper):
         self.gateway.on_tick(copy(tick))
 
     def tickSize(
-        self, reqId: TickerId, tickType: TickType, size: int
+        self, reqId: TickerId, tickType: TickType, size: Decimal
     ) -> None:
         """tick数量更新回报"""
         super().tickSize(reqId, tickType, size)
@@ -369,7 +380,7 @@ class IbApi(EWrapper):
 
         tick: TickData = self.ticks[reqId]
         name: str = TICKFIELD_IB2VT[tickType]
-        setattr(tick, name, size)
+        setattr(tick, name, float(size))
 
         self.gateway.on_tick(copy(tick))
 
@@ -392,8 +403,8 @@ class IbApi(EWrapper):
         self,
         orderId: OrderId,
         status: str,
-        filled: float,
-        remaining: float,
+        filled: Decimal,
+        remaining: Decimal,
         avgFillPrice: float,
         permId: int,
         parentId: int,
@@ -422,7 +433,7 @@ class IbApi(EWrapper):
         if not order:
             return
 
-        order.traded = filled
+        order.traded = float(filled)
 
         # 过滤撤单中止状态
         order_status: Status = STATUS_IB2VT.get(status, None)
@@ -486,7 +497,7 @@ class IbApi(EWrapper):
     def updatePortfolio(
         self,
         contract: Contract,
-        position: float,
+        position: Decimal,
         marketPrice: float,
         marketValue: float,
         averageCost: float,
@@ -514,7 +525,7 @@ class IbApi(EWrapper):
             exchange: Exchange = Exchange.SMART   # Use smart routing for default
 
         if not exchange:
-            msg: str = f"存在不支持的交易所持仓{generate_symbol(contract)} {contract.exchange} {contract.primaryExchange}"
+            msg: str = f"存在不支持的交易所持仓：{generate_symbol(contract)} {contract.exchange} {contract.primaryExchange}"
             self.gateway.write_log(msg)
             return
 
@@ -528,7 +539,7 @@ class IbApi(EWrapper):
             symbol=generate_symbol(contract),
             exchange=exchange,
             direction=Direction.NET,
-            volume=position,
+            volume=float(position),
             price=price,
             pnl=unrealizedPNL,
             gateway_name=self.gateway_name,
@@ -565,6 +576,23 @@ class IbApi(EWrapper):
             stop_supported=True,
             gateway_name=self.gateway_name,
         )
+        self.ib_localsymbol_map[ib_contract.localSymbol] = symbol
+
+        if contract.product == Product.OPTION:
+            contract.option_portfolio = ib_contract.symbol
+            contract.option_type = OPTION_IB2VT.get(ib_contract.right, None)
+            contract.option_strike = ib_contract.strike
+            contract.option_index = str(ib_contract.strike)
+            contract.option_expiry = datetime.strptime(ib_contract.lastTradeDateOrContractMonth, "%Y%m%d")
+
+            if ib_contract.secType == "FOP":
+                undersymbol = self.ib_localsymbol_map.get(contractDetails.underSymbol, None)
+                if undersymbol:
+                    contract.option_underlying = undersymbol
+                else:
+                    contract.option_underlying = contractDetails.underSymbol    # 期货期权推送的underSymbol都是IB Symbol
+            else:
+                contract.option_underlying = contractDetails.underSymbol + "_" + contractDetails.contractMonth
 
         if contract.vt_symbol not in self.contracts:
             self.gateway.on_contract(contract)
@@ -572,14 +600,47 @@ class IbApi(EWrapper):
             self.contracts[contract.vt_symbol] = contract
             self.save_contract_data()
 
+        if symbol not in self.ticks:
+            # 订阅期权链tick数据并创建tick对象缓冲区（此时期权链上的合约并没有被缓存进self.subscribed字典中，若断连不会自动重新订阅）
+            self.reqid += 1
+            tickid: int = self.reqid
+            self.client.reqMktData(tickid, ib_contract, "", False, False, [])
+
+            tick: TickData = TickData(
+                symbol=symbol,
+                exchange=contract.exchange,
+                datetime=datetime.now(LOCAL_TZ),
+                gateway_name=self.gateway_name,
+            )
+            self.ticks[tickid] = tick
+            self.tick_exchange[tickid] = contract.exchange
+            self.tickids[symbol] = tickid
+
+    def contractDetailsEnd(self, reqId: int):
+        """合约数据查询完毕回报"""
+        if reqId == self.fop_reqid:
+            self.futcontract_condition.acquire()
+            self.futcontract_condition.notify()
+            self.futcontract_condition.release()
+
     def execDetails(
         self, reqId: int, contract: Contract, execution: Execution
     ) -> None:
         """交易数据更新回报"""
         super().execDetails(reqId, contract, execution)
 
-        dt: datetime = datetime.strptime(execution.time, "%Y%m%d  %H:%M:%S")
-        dt: datetime = dt.replace(tzinfo=LOCAL_TZ)
+        if "/" in execution.time:
+            timezone = execution.time.split(" ")[-1]
+            time_str = execution.time.replace(f" {timezone}", "")
+            tz = ZoneInfo(timezone)
+        else:
+            time_str = execution.time
+            tz = LOCAL_TZ
+        dt: datetime = datetime.strptime(time_str, "%Y%m%d  %H:%M:%S")
+        dt: datetime = dt.replace(tzinfo=tz)
+
+        if tz != LOCAL_TZ:
+            dt = dt.astimezone(LOCAL_TZ)
 
         trade: TradeData = TradeData(
             symbol=generate_symbol(contract),
@@ -588,7 +649,7 @@ class IbApi(EWrapper):
             tradeid=str(execution.execId),
             direction=DIRECTION_IB2VT[execution.side],
             price=execution.price,
-            volume=execution.shares,
+            volume=float(execution.shares),
             datetime=dt,
             gateway_name=self.gateway_name,
         )
@@ -610,18 +671,29 @@ class IbApi(EWrapper):
     def historicalData(self, reqId: int, ib_bar: IbBarData) -> None:
         """历史数据更新回报"""
         # 日级别数据和周级别日期数据的数据形式为%Y%m%d
-        if len(ib_bar.date) > 8:
-            dt: datetime = datetime.strptime(ib_bar.date, "%Y%m%d %H:%M:%S")
+        if "/" in ib_bar.date:
+            timezone = ib_bar.date.split(" ")[-1]
+            time_str = ib_bar.date.replace(f" {timezone}", "")
+            tz = ZoneInfo(timezone)
         else:
-            dt: datetime = datetime.strptime(ib_bar.date, "%Y%m%d")
-        dt: datetime = dt.replace(tzinfo=LOCAL_TZ)
+            time_str = ib_bar.date
+            tz = LOCAL_TZ
+
+        if ":" in ib_bar.date:
+            dt: datetime = datetime.strptime(time_str, "%Y%m%d %H:%M:%S")
+        else:
+            dt: datetime = datetime.strptime(time_str, "%Y%m%d")
+        dt: datetime = dt.replace(tzinfo=tz)
+
+        if tz != LOCAL_TZ:
+            dt: datetime = dt.astimezone(LOCAL_TZ)
 
         bar: BarData = BarData(
             symbol=self.history_req.symbol,
             exchange=self.history_req.exchange,
             datetime=dt,
             interval=self.history_req.interval,
-            volume=ib_bar.volume,
+            volume=float(ib_bar.volume),
             open_price=ib_bar.open,
             high_price=ib_bar.high,
             low_price=ib_bar.low,
@@ -674,8 +746,53 @@ class IbApi(EWrapper):
         self.status = False
         self.client.disconnect()
 
+    def query_option_portfolio(self, req: SubscribeRequest) -> None:
+        """查询期权链合约数据"""
+        # e.g. req.vt_symbol = "388-HKD-OPT.SEHK" | "AUD-USD-FOP.CME"
+        if not self.status:
+            return
+
+        if req.exchange not in EXCHANGE_VT2IB:
+            self.gateway.write_log(f"不支持的交易所{req.exchange}")
+            return
+
+        # 过滤重复订阅
+        if req.vt_symbol in self.contracts:
+            return
+
+        # 解析IB合约详情
+        try:
+            fields: list = req.symbol.split(JOIN_SYMBOL)
+
+            ib_contract: Contract = Contract()
+            ib_contract.exchange = EXCHANGE_VT2IB[req.exchange]
+            ib_contract.secType = fields[-1]
+            ib_contract.currency = fields[-2]
+            ib_contract.symbol = fields[0]
+
+            # 期货期权需先订阅期货合约获取对应的IB的本地代码，为之后收到期权合约的标的物信息做转换
+            if ib_contract.secType == "FOP":
+                underlying_symbol: str = req.symbol.replace("FOP", "FUT")
+                option_underlying: Contract = generate_ib_contract(underlying_symbol, req.exchange)
+                self.reqid += 1
+                self.fop_reqid = self.reqid
+                self.client.reqContractDetails(self.fop_reqid, option_underlying)
+                self.futcontract_condition.acquire()
+                self.futcontract_condition.wait(60)
+                self.futcontract_condition.release()
+
+        except IndexError:
+            self.gateway.write_log(f"代码解析失败，请检查格式是否正确{req.symbol}")
+            return
+
+        # 通过TWS查询合约信息
+        self.reqid += 1
+        self.client.reqContractDetails(self.reqid, ib_contract)
+
     def subscribe(self, req: SubscribeRequest) -> None:
         """订阅tick数据更新"""
+        # e.g. req.vt_symbol = "388-20230830-C-290-100-HKD-OPT.SEHK" | "AUD-20240503-C-0.54-100000-USD-FOP.CME"
+
         if not self.status:
             return
 
@@ -700,7 +817,8 @@ class IbApi(EWrapper):
 
         #  订阅tick数据并创建tick对象缓冲区
         self.reqid += 1
-        self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])
+        tickid: int = self.reqid
+        self.client.reqMktData(tickid, ib_contract, "", False, False, [])
 
         tick: TickData = TickData(
             symbol=req.symbol,
@@ -708,8 +826,29 @@ class IbApi(EWrapper):
             datetime=datetime.now(LOCAL_TZ),
             gateway_name=self.gateway_name,
         )
-        self.ticks[self.reqid] = tick
-        self.tick_exchange[self.reqid] = req.exchange
+        self.ticks[tickid] = tick
+        self.tick_exchange[tickid] = req.exchange
+        self.tickids[req.symbol] = tickid
+
+    def unsubscribe(self, req: SubscribeRequest) -> None:
+        """退订tick数据更新"""
+        if not self.status:
+            return
+
+        # 过滤未订阅的合约
+        tickid: int = self.tickids.get(req.symbol, None)
+        if not tickid:
+            self.gateway.write_log(f"退订失败，找不到合约{req.symbol}")
+            return
+
+        # 通过TWS退订合约行情
+        self.client.cancelMktData(tickid)
+
+        #  删除tick对象缓冲区
+        self.subscribed.pop(req.vt_symbol)
+        self.ticks.pop(tickid)
+        self.tick_exchange.pop(tickid)
+        self.tickids.pop(req.symbol)
 
     def send_order(self, req: OrderRequest) -> str:
         """委托下单"""
@@ -735,12 +874,8 @@ class IbApi(EWrapper):
         ib_order.clientId = self.clientid
         ib_order.action = DIRECTION_VT2IB[req.direction]
         ib_order.orderType = ORDERTYPE_VT2IB[req.type]
-        ib_order.totalQuantity = req.volume
+        ib_order.totalQuantity = Decimal(req.volume)
         ib_order.account = self.account
-
-        # 修复API版本升级导致的委托报错问题
-        ib_order.eTradeOnly = False
-        ib_order.firmQuoteOnly = False
 
         if req.type == OrderType.LIMIT:
             ib_order.lmtPrice = req.price
@@ -759,7 +894,7 @@ class IbApi(EWrapper):
         if not self.status:
             return
 
-        self.client.cancelOrder(int(req.orderid))
+        self.client.cancelOrder(int(req.orderid), "")
 
     def query_history(self, req: HistoryRequest) -> List[BarData]:
         """查询历史数据"""
@@ -776,10 +911,10 @@ class IbApi(EWrapper):
 
         if req.end:
             end: datetime = req.end
-            end_str: str = end.strftime("%Y%m%d %H:%M:%S")
         else:
             end: datetime = datetime.now(LOCAL_TZ)
-            end_str: str = ""
+
+        end_str: str = end.strftime("%Y%m%d %H:%M:%S") + " " + get_localzone_name()
 
         delta: timedelta = end - req.start
         days: int = min(delta.days, 180)     # IB 只提供6个月数据
@@ -806,7 +941,7 @@ class IbApi(EWrapper):
         )
 
         self.history_condition.acquire()    # 等待异步数据返回
-        self.history_condition.wait()
+        self.history_condition.wait(60)
         self.history_condition.release()
 
         history: List[BarData] = self.history_buf

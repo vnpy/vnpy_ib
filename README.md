@@ -13,7 +13,7 @@
 
 ## 说明
 
-基于ibapi的9.81.1.post1版本开发的InteractiveBrokers交易接口。
+基于ibapi的1019.01版本（需在IB官网下载安装TWS API之后，将TWS API.source.pythonclient文件夹下的ibapi文件夹手动放置于使用python的site-packages文件夹下）开发的InteractiveBrokers交易接口。
 
 IbGateway中的合约代码命名规则和举例：
 
@@ -28,7 +28,7 @@ IbGateway中的合约代码命名规则和举例：
 
 ## 安装
 
-安装环境推荐基于3.4.0版本以上的【[**VeighNa Studio**](https://www.vnpy.com)】。
+安装环境推荐基于3.8.0版本以上的【[**VeighNa Studio**](https://www.vnpy.com)】。
 
 直接使用pip命令：
 
@@ -71,3 +71,5 @@ def main():
 if __name__ == "__main__":
     main()
 ```
+
+
