@@ -450,8 +450,9 @@ class IbApi(EWrapper):
         )
 
         orderid: str = str(orderId)
+
         order: OrderData = OrderData(
-            symbol=generate_symbol(ib_contract),
+            symbol=self.generate_symbol(ib_contract),
             exchange=EXCHANGE_IB2VT.get(ib_contract.exchange, Exchange.SMART),
             type=ORDERTYPE_IB2VT[ib_order.orderType],
             orderid=orderid,
@@ -520,7 +521,7 @@ class IbApi(EWrapper):
             exchange: Exchange = Exchange.SMART   # Use smart routing for default
 
         if not exchange:
-            msg: str = f"存在不支持的交易所持仓：{generate_symbol(contract)} {contract.exchange} {contract.primaryExchange}"
+            msg: str = f"存在不支持的交易所持仓：{self.generate_symbol(contract)} {contract.exchange} {contract.primaryExchange}"
             self.gateway.write_log(msg)
             return
 
@@ -531,7 +532,7 @@ class IbApi(EWrapper):
         price = averageCost / ib_size
 
         pos: PositionData = PositionData(
-            symbol=generate_symbol(contract),
+            symbol=self.generate_symbol(contract),
             exchange=exchange,
             direction=Direction.NET,
             volume=float(position),
@@ -613,7 +614,7 @@ class IbApi(EWrapper):
             dt = dt.astimezone(LOCAL_TZ)
 
         trade: TradeData = TradeData(
-            symbol=generate_symbol(contract),
+            symbol=self.generate_symbol(contract),
             exchange=EXCHANGE_IB2VT.get(contract.exchange, Exchange.SMART),
             orderid=str(execution.orderId),
             tradeid=str(execution.execId),
@@ -903,6 +904,30 @@ class IbApi(EWrapper):
         f["contracts"] = self.contracts
         f.close()
 
+    def generate_symbol(self, ib_contract: Contract) -> str:
+        """生成合约代码"""
+        # 生成字符串风格代码
+        fields: list = [ib_contract.symbol]
+
+        if ib_contract.secType in ["FUT", "OPT", "FOP"]:
+            fields.append(ib_contract.lastTradeDateOrContractMonth)
+
+        if ib_contract.secType in ["OPT", "FOP"]:
+            fields.append(ib_contract.right)
+            fields.append(str(ib_contract.strike))
+            fields.append(str(ib_contract.multiplier))
+
+        fields.append(ib_contract.currency)
+        fields.append(ib_contract.secType)
+
+        symbol: str = JOIN_SYMBOL.join(fields)
+
+        # 在合约信息中找不到字符串风格代码，则使用数字代码
+        if symbol not in self.contracts:
+            symbol = str(ib_contract.conId)
+
+        return symbol
+
 
 def generate_ib_contract(symbol: str, exchange: Exchange) -> Optional[Contract]:
     """生产IB合约"""
@@ -935,23 +960,3 @@ def generate_ib_contract(symbol: str, exchange: Exchange) -> Optional[Contract]:
         ib_contract.conId = symbol
 
     return ib_contract
-
-
-def generate_symbol(ib_contract: Contract) -> str:
-    """生成vnpy代码"""
-    fields: list = [ib_contract.symbol]
-
-    if ib_contract.secType in ["FUT", "OPT", "FOP"]:
-        fields.append(ib_contract.lastTradeDateOrContractMonth)
-
-    if ib_contract.secType in ["OPT", "FOP"]:
-        fields.append(ib_contract.right)
-        fields.append(str(ib_contract.strike))
-        fields.append(str(ib_contract.multiplier))
-
-    fields.append(ib_contract.currency)
-    fields.append(ib_contract.secType)
-
-    symbol: str = JOIN_SYMBOL.join(fields)
-
-    return symbol
