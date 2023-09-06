@@ -280,6 +280,8 @@ class IbApi(EWrapper):
         self.history_condition: Condition = Condition()
         self.history_buf: List[BarData] = []
 
+        self.reqid_symbol_map: dict[int, str] = {}
+
         self.client: EClient = EClient(self)
 
     def connectAck(self) -> None:
@@ -337,9 +339,7 @@ class IbApi(EWrapper):
             for req in reqs:
                 self.subscribe(req)
 
-    def tickPrice(
-        self, reqId: TickerId, tickType: TickType, price: float, attrib: TickAttrib
-    ) -> None:
+    def tickPrice(self, reqId: TickerId, tickType: TickType, price: float, attrib: TickAttrib) -> None:
         """tick价格更新回报"""
         super().tickPrice(reqId, tickType, price, attrib)
 
@@ -551,12 +551,19 @@ class IbApi(EWrapper):
         """合约数据更新回报"""
         super().contractDetails(reqId, contractDetails)
 
-        # 从IB合约生成vnpy代码
+        # 提取合约信息
         ib_contract: Contract = contractDetails.contract
+
+        # 处理合约乘数为0的情况
         if not ib_contract.multiplier:
             ib_contract.multiplier = 1
 
-        symbol: str = generate_symbol(ib_contract)
+        # 字符串风格的代码，需要从缓存中获取
+        if reqId in self.reqid_symbol_map:
+            symbol: str = self.reqid_symbol_map[reqId]
+        # 否则默认使用数字风格代码
+        else:
+            symbol: str = str(ib_contract.conId)
 
         # 生成合约
         contract: ContractData = ContractData(
@@ -719,11 +726,7 @@ class IbApi(EWrapper):
             self.gateway.write_log(f"不支持的交易所{req.exchange}")
             return
 
-        # 过滤重复订阅
-        if req.vt_symbol in self.contracts:
-            return
-
-        # 解析IB合约详情
+        # 解析IB期权合约
         try:
             fields: list = req.symbol.split(JOIN_SYMBOL)
 
@@ -732,7 +735,6 @@ class IbApi(EWrapper):
             ib_contract.secType = fields[-1]
             ib_contract.currency = fields[-2]
             ib_contract.symbol = fields[0]
-
         except IndexError:
             self.gateway.write_log(f"代码解析失败，请检查格式是否正确{req.symbol}")
             return
@@ -766,6 +768,10 @@ class IbApi(EWrapper):
         # 通过TWS查询合约信息
         self.reqid += 1
         self.client.reqContractDetails(self.reqid, ib_contract)
+
+        # 如果使用了字符串风格的代码，则需要缓存
+        if "-" in req.symbol:
+            self.reqid_symbol_map[self.reqid] = req.symbol
 
         #  订阅tick数据并创建tick对象缓冲区
         self.reqid += 1
@@ -900,28 +906,33 @@ class IbApi(EWrapper):
 
 def generate_ib_contract(symbol: str, exchange: Exchange) -> Optional[Contract]:
     """生产IB合约"""
-    try:
-        fields: list = symbol.split(JOIN_SYMBOL)
+    if "-" in symbol:
+        try:
+            fields: list = symbol.split(JOIN_SYMBOL)
 
+            ib_contract: Contract = Contract()
+            ib_contract.exchange = EXCHANGE_VT2IB[exchange]
+            ib_contract.secType = fields[-1]
+            ib_contract.currency = fields[-2]
+            ib_contract.symbol = fields[0]
+
+            if ib_contract.secType in ["FUT", "OPT", "FOP"]:
+                ib_contract.lastTradeDateOrContractMonth = fields[1]
+
+            if ib_contract.secType == "FUT":
+                if len(fields) == 5:
+                    ib_contract.multiplier = int(fields[2])
+
+            if ib_contract.secType in ["OPT", "FOP"]:
+                ib_contract.right = fields[2]
+                ib_contract.strike = float(fields[3])
+                ib_contract.multiplier = int(fields[4])
+        except IndexError:
+            ib_contract = None
+    else:
         ib_contract: Contract = Contract()
         ib_contract.exchange = EXCHANGE_VT2IB[exchange]
-        ib_contract.secType = fields[-1]
-        ib_contract.currency = fields[-2]
-        ib_contract.symbol = fields[0]
-
-        if ib_contract.secType in ["FUT", "OPT", "FOP"]:
-            ib_contract.lastTradeDateOrContractMonth = fields[1]
-
-        if ib_contract.secType == "FUT":
-            if len(fields) == 5:
-                ib_contract.multiplier = int(fields[2])
-
-        if ib_contract.secType in ["OPT", "FOP"]:
-            ib_contract.right = fields[2]
-            ib_contract.strike = float(fields[3])
-            ib_contract.multiplier = int(fields[4])
-    except IndexError:
-        ib_contract = None
+        ib_contract.conId = symbol
 
     return ib_contract
 
