@@ -266,7 +266,6 @@ class IbApi(EWrapper):
         self.orderid: int = 0
         self.clientid: int = 0
         self.history_reqid: int = 0
-        self.fop_reqid: int = 0
         self.account: str = ""
         self.ticks: Dict[int, TickData] = {}
         self.orders: Dict[str, OrderData] = {}
@@ -281,9 +280,6 @@ class IbApi(EWrapper):
         self.history_req: HistoryRequest = None
         self.history_condition: Condition = Condition()
         self.history_buf: List[BarData] = []
-
-        self.futcontract_condition: Condition = Condition()
-        self.ib_localsymbol_map: Dict[str, str] = {}
 
         self.client: EClient = EClient(self)
 
@@ -576,7 +572,6 @@ class IbApi(EWrapper):
             stop_supported=True,
             gateway_name=self.gateway_name,
         )
-        self.ib_localsymbol_map[ib_contract.localSymbol] = symbol
 
         if contract.product == Product.OPTION:
             contract.option_portfolio = ib_contract.symbol
@@ -586,11 +581,7 @@ class IbApi(EWrapper):
             contract.option_expiry = datetime.strptime(ib_contract.lastTradeDateOrContractMonth, "%Y%m%d")
 
             if ib_contract.secType == "FOP":
-                undersymbol = self.ib_localsymbol_map.get(contractDetails.underSymbol, None)
-                if undersymbol:
-                    contract.option_underlying = undersymbol
-                else:
-                    contract.option_underlying = contractDetails.underSymbol    # 期货期权推送的underSymbol都是IB Symbol
+                contract.option_underlying = contractDetails.underSymbol    # 期货期权的underSymbol都是IB Symbol
             else:
                 contract.option_underlying = contractDetails.underSymbol + "_" + contractDetails.contractMonth
 
@@ -615,13 +606,6 @@ class IbApi(EWrapper):
             self.ticks[tickid] = tick
             self.tick_exchange[tickid] = contract.exchange
             self.tickids[symbol] = tickid
-
-    def contractDetailsEnd(self, reqId: int):
-        """合约数据查询完毕回报"""
-        if reqId == self.fop_reqid:
-            self.futcontract_condition.acquire()
-            self.futcontract_condition.notify()
-            self.futcontract_condition.release()
 
     def execDetails(
         self, reqId: int, contract: Contract, execution: Execution
@@ -769,17 +753,6 @@ class IbApi(EWrapper):
             ib_contract.secType = fields[-1]
             ib_contract.currency = fields[-2]
             ib_contract.symbol = fields[0]
-
-            # 期货期权需先订阅期货合约获取对应的IB的本地代码，为之后收到期权合约的标的物信息做转换
-            if ib_contract.secType == "FOP":
-                underlying_symbol: str = req.symbol.replace("FOP", "FUT")
-                option_underlying: Contract = generate_ib_contract(underlying_symbol, req.exchange)
-                self.reqid += 1
-                self.fop_reqid = self.reqid
-                self.client.reqContractDetails(self.fop_reqid, option_underlying)
-                self.futcontract_condition.acquire()
-                self.futcontract_condition.wait(60)
-                self.futcontract_condition.release()
 
         except IndexError:
             self.gateway.write_log(f"代码解析失败，请检查格式是否正确{req.symbol}")
