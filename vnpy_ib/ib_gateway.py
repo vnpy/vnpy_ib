@@ -578,31 +578,13 @@ class IbApi(EWrapper):
             contract.option_strike = ib_contract.strike
             contract.option_index = str(ib_contract.strike)
             contract.option_expiry = datetime.strptime(ib_contract.lastTradeDateOrContractMonth, "%Y%m%d")
-
-            if ib_contract.secType == "FOP":
-                contract.option_underlying = contractDetails.underSymbol    # 期货期权的underSymbol都是IB Symbol
-            else:
-                contract.option_underlying = contractDetails.underSymbol + "_" + contractDetails.contractMonth
+            contract.option_underlying = contractDetails.underSymbol + "_" + contractDetails.contractMonth
 
         if contract.vt_symbol not in self.contracts:
             self.gateway.on_contract(contract)
 
             self.contracts[contract.vt_symbol] = contract
             self.save_contract_data()
-
-        if symbol not in self.ticks:
-            # 订阅期权链tick数据并创建tick对象缓冲区（此时期权链上的合约并没有被缓存进self.subscribed字典中，若断连不会自动重新订阅）
-            self.reqid += 1
-            self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])
-
-            tick: TickData = TickData(
-                symbol=symbol,
-                exchange=contract.exchange,
-                datetime=datetime.now(LOCAL_TZ),
-                gateway_name=self.gateway_name,
-            )
-            self.ticks[self.reqid] = tick
-            self.tick_exchange[self.reqid] = contract.exchange
 
     def execDetails(
         self, reqId: int, contract: Contract, execution: Execution
