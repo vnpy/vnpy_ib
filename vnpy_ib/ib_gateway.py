@@ -271,7 +271,6 @@ class IbApi(EWrapper):
         self.orders: Dict[str, OrderData] = {}
         self.accounts: Dict[str, AccountData] = {}
         self.contracts: Dict[str, ContractData] = {}
-        self.tickids: Dict[str, int] = {}
 
         self.tick_exchange: Dict[int, Exchange] = {}
         self.subscribed: Dict[str, SubscribeRequest] = {}
@@ -594,8 +593,7 @@ class IbApi(EWrapper):
         if symbol not in self.ticks:
             # 订阅期权链tick数据并创建tick对象缓冲区（此时期权链上的合约并没有被缓存进self.subscribed字典中，若断连不会自动重新订阅）
             self.reqid += 1
-            tickid: int = self.reqid
-            self.client.reqMktData(tickid, ib_contract, "", False, False, [])
+            self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])
 
             tick: TickData = TickData(
                 symbol=symbol,
@@ -603,9 +601,8 @@ class IbApi(EWrapper):
                 datetime=datetime.now(LOCAL_TZ),
                 gateway_name=self.gateway_name,
             )
-            self.ticks[tickid] = tick
-            self.tick_exchange[tickid] = contract.exchange
-            self.tickids[symbol] = tickid
+            self.ticks[self.reqid] = tick
+            self.tick_exchange[self.reqid] = contract.exchange
 
     def execDetails(
         self, reqId: int, contract: Contract, execution: Execution
@@ -790,8 +787,7 @@ class IbApi(EWrapper):
 
         #  订阅tick数据并创建tick对象缓冲区
         self.reqid += 1
-        tickid: int = self.reqid
-        self.client.reqMktData(tickid, ib_contract, "", False, False, [])
+        self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])
 
         tick: TickData = TickData(
             symbol=req.symbol,
@@ -799,29 +795,8 @@ class IbApi(EWrapper):
             datetime=datetime.now(LOCAL_TZ),
             gateway_name=self.gateway_name,
         )
-        self.ticks[tickid] = tick
-        self.tick_exchange[tickid] = req.exchange
-        self.tickids[req.symbol] = tickid
-
-    def unsubscribe(self, req: SubscribeRequest) -> None:
-        """退订tick数据更新"""
-        if not self.status:
-            return
-
-        # 过滤未订阅的合约
-        tickid: int = self.tickids.get(req.symbol, None)
-        if not tickid:
-            self.gateway.write_log(f"退订失败，找不到合约{req.symbol}")
-            return
-
-        # 通过TWS退订合约行情
-        self.client.cancelMktData(tickid)
-
-        #  删除tick对象缓冲区
-        self.subscribed.pop(req.vt_symbol)
-        self.ticks.pop(tickid)
-        self.tick_exchange.pop(tickid)
-        self.tickids.pop(req.symbol)
+        self.ticks[self.reqid] = tick
+        self.tick_exchange[self.reqid] = req.exchange
 
     def send_order(self, req: OrderRequest) -> str:
         """委托下单"""
