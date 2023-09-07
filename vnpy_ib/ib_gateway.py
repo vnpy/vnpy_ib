@@ -151,6 +151,10 @@ TICKFIELD_IB2VT: Dict[int, str] = {
     7: "low_price",
     8: "volume",
     9: "pre_close",
+    10: "bid",
+    11: "ask",
+    12: "last",
+    13: "model",
     14: "open_price",
 }
 
@@ -397,6 +401,55 @@ class IbApi(EWrapper):
         tick.datetime = dt.replace(tzinfo=LOCAL_TZ)
 
         self.gateway.on_tick(copy(tick))
+
+    def tickOptionComputation(
+        self,
+        reqId: TickerId,
+        tickType: TickType,
+        tickAttrib: int,
+        impliedVol: float,
+        delta: float,
+        optPrice: float,
+        pvDividend: float,
+        gamma: float,
+        vega: float,
+        theta: float,
+        undPrice: float
+    ):
+        """tick期权数据推送"""
+        super().tickOptionComputation(
+            reqId,
+            tickType,
+            tickAttrib,
+            impliedVol,
+            delta,
+            optPrice,
+            pvDividend,
+            gamma,
+            vega,
+            theta,
+            undPrice,
+        )
+
+        tick: TickData = self.ticks[reqId]
+        prefix: str = TICKFIELD_IB2VT[tickType]
+
+        tick.extra["underlying_price"] = undPrice
+
+        if optPrice:
+            tick.extra[f"{prefix}_price"] = optPrice
+            tick.extra[f"{prefix}_impv"] = impliedVol
+            tick.extra[f"{prefix}_delta"] = delta
+            tick.extra[f"{prefix}_gamma"] = gamma
+            tick.extra[f"{prefix}_theta"] = theta
+            tick.extra[f"{prefix}_vega"] = vega
+        else:
+            tick.extra[f"{prefix}_price"] = 0
+            tick.extra[f"{prefix}_impv"] = 0
+            tick.extra[f"{prefix}_delta"] = 0
+            tick.extra[f"{prefix}_gamma"] = 0
+            tick.extra[f"{prefix}_theta"] = 0
+            tick.extra[f"{prefix}_vega"] = 0
 
     def orderStatus(
         self,
@@ -793,8 +846,10 @@ class IbApi(EWrapper):
             symbol=req.symbol,
             exchange=req.exchange,
             datetime=datetime.now(LOCAL_TZ),
-            gateway_name=self.gateway_name,
+            gateway_name=self.gateway_name
         )
+        tick.extra = {}
+
         self.ticks[self.reqid] = tick
         self.tick_exchange[self.reqid] = req.exchange
 
