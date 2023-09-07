@@ -186,7 +186,8 @@ class IbGateway(BaseGateway):
         "TWS地址": "127.0.0.1",
         "TWS端口": 7497,
         "客户号": 1,
-        "交易账户": ""
+        "交易账户": "",
+        "查询期权": ["否", "是"]
     }
 
     exchanges: List[str] = list(EXCHANGE_VT2IB.keys())
@@ -204,8 +205,9 @@ class IbGateway(BaseGateway):
         port: int = setting["TWS端口"]
         clientid: int = setting["客户号"]
         account: str = setting["交易账户"]
+        query_options: bool = setting["查询期权"] == "是"
 
-        self.api.connect(host, port, clientid, account)
+        self.api.connect(host, port, clientid, account, query_options)
 
         self.event_engine.register(EVENT_TIMER, self.process_timer_event)
 
@@ -267,6 +269,8 @@ class IbApi(EWrapper):
         self.clientid: int = 0
         self.history_reqid: int = 0
         self.account: str = ""
+        self.query_options: bool = False
+
         self.ticks: Dict[int, TickData] = {}
         self.orders: Dict[str, OrderData] = {}
         self.accounts: Dict[str, AccountData] = {}
@@ -281,7 +285,6 @@ class IbApi(EWrapper):
         self.history_buf: List[BarData] = []
 
         self.reqid_symbol_map: dict[int, str] = {}
-        self.option_underlyings: set[str] = set()       # 需要查询期权的标的物
 
         self.client: EClient = EClient(self)
 
@@ -583,21 +586,22 @@ class IbApi(EWrapper):
         )
 
         if contract.product == Product.OPTION:
-            contract.option_portfolio = ib_contract.symbol + "_O"
+            underlying_symbol: str = str(contractDetails.underConId)
+
+            contract.option_portfolio = underlying_symbol + "_O"
             contract.option_type = OPTION_IB2VT.get(ib_contract.right, None)
             contract.option_strike = ib_contract.strike
             contract.option_index = str(ib_contract.strike)
             contract.option_expiry = datetime.strptime(ib_contract.lastTradeDateOrContractMonth, "%Y%m%d")
-            contract.option_underlying = contractDetails.underSymbol + "_" + contractDetails.contractMonth
+            contract.option_underlying = underlying_symbol + "_" + ib_contract.lastTradeDateOrContractMonth
 
         if contract.vt_symbol not in self.contracts:
             self.gateway.on_contract(contract)
 
             self.contracts[contract.vt_symbol] = contract
-            self.save_contract_data()
 
         # 查询期权
-        if contract.symbol in self.option_underlyings:
+        if self.query_options and ib_contract.secType in {"STK", "FUT"}:
             self.query_option_portfolio(ib_contract)
 
     def execDetails(
@@ -688,7 +692,14 @@ class IbApi(EWrapper):
         self.history_condition.notify()
         self.history_condition.release()
 
-    def connect(self, host: str, port: int, clientid: int, account: str) -> None:
+    def connect(
+        self,
+        host: str,
+        port: int,
+        clientid: int,
+        account: str,
+        query_options: bool
+    ) -> None:
         """连接TWS"""
         if self.status:
             return
@@ -697,6 +708,7 @@ class IbApi(EWrapper):
         self.port = port
         self.clientid = clientid
         self.account = account
+        self.query_options = query_options
 
         self.client.connect(host, port, clientid)
         self.thread = Thread(target=self.client.run)
@@ -719,6 +731,8 @@ class IbApi(EWrapper):
         """断开TWS连接"""
         if not self.status:
             return
+
+        self.save_contract_data()
 
         self.status = False
         self.client.disconnect()
@@ -743,7 +757,7 @@ class IbApi(EWrapper):
         self.reqid += 1
         self.client.reqContractDetails(self.reqid, ib_contract)
 
-    def subscribe(self, req: SubscribeRequest, query_options: bool = False) -> None:
+    def subscribe(self, req: SubscribeRequest) -> None:
         """订阅tick数据更新"""
         if not self.status:
             return
@@ -783,9 +797,6 @@ class IbApi(EWrapper):
         )
         self.ticks[self.reqid] = tick
         self.tick_exchange[self.reqid] = req.exchange
-
-        # 如果需要获取对应的期权链，则缓存查询任务
-        self.option_underlyings.add(req.symbol)
 
     def send_order(self, req: OrderRequest) -> str:
         """委托下单"""
