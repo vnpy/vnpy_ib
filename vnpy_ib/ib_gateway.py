@@ -281,6 +281,7 @@ class IbApi(EWrapper):
         self.history_buf: List[BarData] = []
 
         self.reqid_symbol_map: dict[int, str] = {}
+        self.option_underlyings: set[str] = set()       # 需要查询期权的标的物
 
         self.client: EClient = EClient(self)
 
@@ -574,6 +575,7 @@ class IbApi(EWrapper):
             product=PRODUCT_IB2VT[ib_contract.secType],
             size=int(ib_contract.multiplier),
             pricetick=contractDetails.minTick,
+            min_volume=contractDetails.minSize,
             net_position=True,
             history_data=True,
             stop_supported=True,
@@ -581,7 +583,7 @@ class IbApi(EWrapper):
         )
 
         if contract.product == Product.OPTION:
-            contract.option_portfolio = ib_contract.symbol
+            contract.option_portfolio = ib_contract.symbol + "_O"
             contract.option_type = OPTION_IB2VT.get(ib_contract.right, None)
             contract.option_strike = ib_contract.strike
             contract.option_index = str(ib_contract.strike)
@@ -593,6 +595,10 @@ class IbApi(EWrapper):
 
             self.contracts[contract.vt_symbol] = contract
             self.save_contract_data()
+
+        # 查询期权
+        if contract.symbol in self.option_underlyings:
+            self.query_option_portfolio(ib_contract)
 
     def execDetails(
         self, reqId: int, contract: Contract, execution: Execution
@@ -717,37 +723,29 @@ class IbApi(EWrapper):
         self.status = False
         self.client.disconnect()
 
-    def query_option_portfolio(self, req: SubscribeRequest) -> None:
+    def query_option_portfolio(self, underlying: Contract) -> None:
         """查询期权链合约数据"""
-        # e.g. req.vt_symbol = "388-HKD-OPT.SEHK" | "AUD-USD-FOP.CME"
         if not self.status:
             return
 
-        if req.exchange not in EXCHANGE_VT2IB:
-            self.gateway.write_log(f"不支持的交易所{req.exchange}")
-            return
-
         # 解析IB期权合约
-        try:
-            fields: list = req.symbol.split(JOIN_SYMBOL)
+        ib_contract: Contract = Contract()
+        ib_contract.exchange = underlying.exchange
+        ib_contract.currency = underlying.currency
+        ib_contract.symbol = underlying.symbol
+        ib_contract.lastTradeDateOrContractMonth = "20240627"
 
-            ib_contract: Contract = Contract()
-            ib_contract.exchange = EXCHANGE_VT2IB[req.exchange]
-            ib_contract.secType = fields[-1]
-            ib_contract.currency = fields[-2]
-            ib_contract.symbol = fields[0]
-        except IndexError:
-            self.gateway.write_log(f"代码解析失败，请检查格式是否正确{req.symbol}")
-            return
+        if underlying.secType == "FUT":
+            ib_contract.secType = "FOP"
+        else:
+            ib_contract.secType = "OPT"
 
         # 通过TWS查询合约信息
         self.reqid += 1
         self.client.reqContractDetails(self.reqid, ib_contract)
 
-    def subscribe(self, req: SubscribeRequest) -> None:
+    def subscribe(self, req: SubscribeRequest, query_options: bool = False) -> None:
         """订阅tick数据更新"""
-        # e.g. req.vt_symbol = "388-20230830-C-290-100-HKD-OPT.SEHK" | "AUD-20240503-C-0.54-100000-USD-FOP.CME"
-
         if not self.status:
             return
 
@@ -786,6 +784,9 @@ class IbApi(EWrapper):
         )
         self.ticks[self.reqid] = tick
         self.tick_exchange[self.reqid] = req.exchange
+
+        # 如果需要获取对应的期权链，则缓存查询任务
+        self.option_underlyings.add(req.symbol)
 
     def send_order(self, req: OrderRequest) -> str:
         """委托下单"""
