@@ -730,10 +730,9 @@ class IbApi(EWrapper):
 
         # 解析IB期权合约
         ib_contract: Contract = Contract()
+        ib_contract.symbol = underlying.symbol
         ib_contract.exchange = underlying.exchange
         ib_contract.currency = underlying.currency
-        ib_contract.symbol = underlying.symbol
-        ib_contract.lastTradeDateOrContractMonth = "20240627"
 
         if underlying.secType == "FUT":
             ib_contract.secType = "FOP"
