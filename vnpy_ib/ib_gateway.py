@@ -7,6 +7,8 @@ XAUUSD-USD-CMDTY  SMART
 ES-202002-USD-FUT  GLOBEX
 SI-202006-1000-USD-FUT  NYMEX
 ES-2020006-C-2430-50-USD-FOP  GLOBEX
+
+ConId is also supported for symbol.
 """
 
 
@@ -323,7 +325,13 @@ class IbApi(EWrapper):
         msg: str = f"服务器时间: {time_string}"
         self.gateway.write_log(msg)
 
-    def error(self, reqId: TickerId, errorCode: int, errorString: str, advancedOrderRejectJson: str = "") -> None:
+    def error(
+        self,
+        reqId: TickerId,
+        errorCode: int,
+        errorString: str,
+        advancedOrderRejectJson: str = ""
+    ) -> None:
         """具体错误请求回报"""
         super().error(reqId, errorCode, errorString)
 
@@ -527,9 +535,7 @@ class IbApi(EWrapper):
         self.orders[orderid] = order
         self.gateway.on_order(copy(order))
 
-    def updateAccountValue(
-        self, key: str, val: str, currency: str, accountName: str
-    ) -> None:
+    def updateAccountValue(self, key: str, val: str, currency: str, accountName: str) -> None:
         """账号更新回报"""
         super().updateAccountValue(key, val, currency, accountName)
 
@@ -658,9 +664,7 @@ class IbApi(EWrapper):
         if self.query_options and ib_contract.secType in {"STK", "FUT"}:
             self.query_option_portfolio(ib_contract)
 
-    def execDetails(
-        self, reqId: int, contract: Contract, execution: Execution
-    ) -> None:
+    def execDetails(self, reqId: int, contract: Contract, execution: Execution) -> None:
         """交易数据更新回报"""
         super().execDetails(reqId, contract, execution)
 
@@ -999,6 +1003,7 @@ class IbApi(EWrapper):
 
 def generate_ib_contract(symbol: str, exchange: Exchange) -> Optional[Contract]:
     """生产IB合约"""
+    # 字符串代码
     if "-" in symbol:
         try:
             fields: list = symbol.split(JOIN_SYMBOL)
@@ -1022,6 +1027,7 @@ def generate_ib_contract(symbol: str, exchange: Exchange) -> Optional[Contract]:
                 ib_contract.multiplier = int(fields[4])
         except IndexError:
             ib_contract = None
+    # 数字代码（ConId）
     else:
         ib_contract: Contract = Contract()
         ib_contract.exchange = EXCHANGE_VT2IB[exchange]
