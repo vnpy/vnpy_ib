@@ -370,11 +370,10 @@ class IbApi(EWrapper):
                 return
             tick.last_price = (tick.bid_price_1 + tick.ask_price_1) / 2
             tick.datetime = datetime.now(LOCAL_TZ)
+
         self.gateway.on_tick(copy(tick))
 
-    def tickSize(
-        self, reqId: TickerId, tickType: TickType, size: Decimal
-    ) -> None:
+    def tickSize(self, reqId: TickerId, tickType: TickType, size: Decimal) -> None:
         """tick数量更新回报"""
         super().tickSize(reqId, tickType, size)
 
@@ -387,9 +386,7 @@ class IbApi(EWrapper):
 
         self.gateway.on_tick(copy(tick))
 
-    def tickString(
-        self, reqId: TickerId, tickType: TickType, value: str
-    ) -> None:
+    def tickString(self, reqId: TickerId, tickType: TickType, value: str) -> None:
         """tick字符串更新回报"""
         super().tickString(reqId, tickType, value)
 
@@ -487,7 +484,7 @@ class IbApi(EWrapper):
 
         order.traded = float(filled)
 
-        # 过滤撤单中止状态
+        # 过滤撤单中状态
         order_status: Status = STATUS_IB2VT.get(status, None)
         if order_status:
             order.status = order_status
@@ -502,11 +499,14 @@ class IbApi(EWrapper):
         orderState: OrderState,
     ) -> None:
         """新订单回报"""
-        super().openOrder(
-            orderId, ib_contract, ib_order, orderState
-        )
+        super().openOrder(orderId, ib_contract, ib_order, orderState)
 
         orderid: str = str(orderId)
+
+        if ib_order.orderRef:
+            dt: datetime = datetime.strptime(ib_order.orderRef, "%Y-%m-%d %H:%M:%S")
+        else:
+            dt: datetime = datetime.now()
 
         order: OrderData = OrderData(
             symbol=self.generate_symbol(ib_contract),
@@ -515,6 +515,7 @@ class IbApi(EWrapper):
             orderid=orderid,
             direction=DIRECTION_IB2VT[ib_order.action],
             volume=ib_order.totalQuantity,
+            datetime=dt,
             gateway_name=self.gateway_name,
         )
 
@@ -879,6 +880,7 @@ class IbApi(EWrapper):
         ib_order.orderType = ORDERTYPE_VT2IB[req.type]
         ib_order.totalQuantity = Decimal(req.volume)
         ib_order.account = self.account
+        ib_order.orderRef = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         if req.type == OrderType.LIMIT:
             ib_order.lmtPrice = req.price
