@@ -668,14 +668,21 @@ class IbApi(EWrapper):
         """交易数据更新回报"""
         super().execDetails(reqId, contract, execution)
 
-        if "/" in execution.time:
-            timezone = execution.time.split(" ")[-1]
-            time_str = execution.time.replace(f" {timezone}", "")
+        time_str: str = execution.time
+        time_split: list = time_str.split(" ")
+        words_count: int = 3
+
+        if len(time_split) == words_count:
+            timezone = time_split[-1]
+            time_str = time_str.replace(f" {timezone}", "")
             tz = ZoneInfo(timezone)
-        else:
-            time_str = execution.time
+        elif len(time_split) == (words_count - 1):
             tz = LOCAL_TZ
-        dt: datetime = datetime.strptime(time_str, "%Y%m%d  %H:%M:%S")
+        else:
+            self.gateway.write_log(f"收到不支持的时间格式：{time_str}")
+            return
+
+        dt: datetime = datetime.strptime(time_str, "%Y%m%d %H:%M:%S")
         dt: datetime = dt.replace(tzinfo=tz)
 
         if tz != LOCAL_TZ:
@@ -710,15 +717,24 @@ class IbApi(EWrapper):
     def historicalData(self, reqId: int, ib_bar: IbBarData) -> None:
         """历史数据更新回报"""
         # 日级别数据和周级别日期数据的数据形式为%Y%m%d
-        if "/" in ib_bar.date:
-            timezone = ib_bar.date.split(" ")[-1]
-            time_str = ib_bar.date.replace(f" {timezone}", "")
-            tz = ZoneInfo(timezone)
-        else:
-            time_str = ib_bar.date
-            tz = LOCAL_TZ
+        time_str: str = ib_bar.date
+        time_split: list = time_str.split(" ")
+        words_count: int = 3
 
-        if ":" in ib_bar.date:
+        if ":" not in time_str:
+            words_count -= 1
+
+        if len(time_split) == words_count:
+            timezone = time_split[-1]
+            time_str = time_str.replace(f" {timezone}", "")
+            tz = ZoneInfo(timezone)
+        elif len(time_split) == (words_count - 1):
+            tz = LOCAL_TZ
+        else:
+            self.gateway.write_log(f"收到不支持的时间格式：{time_str}")
+            return
+
+        if ":" in time_str:
             dt: datetime = datetime.strptime(time_str, "%Y%m%d %H:%M:%S")
         else:
             dt: datetime = datetime.strptime(time_str, "%Y%m%d")
