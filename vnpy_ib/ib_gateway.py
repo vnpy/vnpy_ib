@@ -109,7 +109,8 @@ EXCHANGE_VT2IB: Dict[Exchange, str] = {
     Exchange.IEX: "IEX",
     Exchange.IBKRATS: "IBKRATS",
     Exchange.OTC: "PINK",
-    Exchange.SGX: "SGX"
+    Exchange.SGX: "SGX",
+    Exchange.CBOE: "CBOE",
 }
 EXCHANGE_IB2VT: Dict[str, Exchange] = {v: k for k, v in EXCHANGE_VT2IB.items()}
 
