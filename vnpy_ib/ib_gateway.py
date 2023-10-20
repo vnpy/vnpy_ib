@@ -255,6 +255,10 @@ class IbGateway(BaseGateway):
 
         self.api.check_connection()
 
+    def query_tick(self, req: SubscribeRequest) -> None:
+        """查询行情切片"""
+        self.api.query_tick(req)
+
 
 class IbApi(EWrapper):
     """IB的API接口"""
@@ -456,6 +460,13 @@ class IbApi(EWrapper):
             tick.extra[f"{prefix}_gamma"] = 0
             tick.extra[f"{prefix}_theta"] = 0
             tick.extra[f"{prefix}_vega"] = 0
+
+    def tickSnapshotEnd(self, reqId: int) -> None:
+        """行情切片查询返回完毕"""
+        super().tickSnapshotEnd(reqId)
+
+        tick: TickData = self.ticks[reqId]
+        self.gateway.write_log(f"{tick.vt_symbol}行情切片查询成功")
 
     def orderStatus(
         self,
@@ -1016,6 +1027,44 @@ class IbApi(EWrapper):
             symbol = str(ib_contract.conId)
 
         return symbol
+
+    def query_tick(self, req: SubscribeRequest) -> None:
+        """查询行情切片"""
+        if not self.status:
+            return
+
+        if req.exchange not in EXCHANGE_VT2IB:
+            self.gateway.write_log(f"不支持的交易所{req.exchange}")
+            return
+
+        # 解析IB合约详情
+        ib_contract: Contract = generate_ib_contract(req.symbol, req.exchange)
+        if not ib_contract:
+            self.gateway.write_log("代码解析失败，请检查格式是否正确")
+            return
+
+        # 通过TWS查询合约信息
+        self.reqid += 1
+        self.client.reqContractDetails(self.reqid, ib_contract)
+
+        # 如果使用了字符串风格的代码，则需要缓存
+        if "-" in req.symbol:
+            self.reqid_symbol_map[self.reqid] = req.symbol
+
+        #  订阅tick数据并创建tick对象缓冲区
+        self.reqid += 1
+        self.client.reqMktData(self.reqid, ib_contract, "", True, False, [])
+
+        tick: TickData = TickData(
+            symbol=req.symbol,
+            exchange=req.exchange,
+            datetime=datetime.now(LOCAL_TZ),
+            gateway_name=self.gateway_name
+        )
+        tick.extra = {}
+
+        self.ticks[self.reqid] = tick
+        self.tick_exchange[self.reqid] = req.exchange
 
 
 def generate_ib_contract(symbol: str, exchange: Exchange) -> Optional[Contract]:
