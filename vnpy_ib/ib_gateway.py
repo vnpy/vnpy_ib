@@ -282,7 +282,6 @@ class IbApi(EWrapper):
         self.accounts: Dict[str, AccountData] = {}
         self.contracts: Dict[str, ContractData] = {}
 
-        self.tick_exchange: Dict[int, Exchange] = {}
         self.subscribed: Dict[str, SubscribeRequest] = {}
         self.data_ready: bool = False
 
@@ -372,8 +371,7 @@ class IbApi(EWrapper):
             tick.name = contract.name
 
         # 本地计算Forex of IDEALPRO和Spot Commodity的tick时间和最新价格
-        exchange: Exchange = self.tick_exchange[reqId]
-        if exchange is Exchange.IDEALPRO or "CMDTY" in tick.symbol:
+        if tick.exchange == Exchange.IDEALPRO or "CMDTY" in tick.symbol:
             if not tick.bid_price_1 or not tick.ask_price_1:
                 return
             tick.last_price = (tick.bid_price_1 + tick.ask_price_1) / 2
@@ -882,7 +880,6 @@ class IbApi(EWrapper):
         tick.extra = {}
 
         self.ticks[self.reqid] = tick
-        self.tick_exchange[self.reqid] = req.exchange
 
     def send_order(self, req: OrderRequest) -> str:
         """委托下单"""
@@ -1043,7 +1040,6 @@ class IbApi(EWrapper):
         tick.extra = {}
 
         self.ticks[self.reqid] = tick
-        self.tick_exchange[self.reqid] = exchange
 
 
 def generate_ib_contract(symbol: str, exchange: Exchange) -> Optional[Contract]:
