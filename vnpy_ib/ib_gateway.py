@@ -23,7 +23,7 @@ from tzlocal import get_localzone_name
 from vnpy.event import EventEngine
 from ibapi.client import EClient
 from ibapi.common import OrderId, TickAttrib, TickerId
-from ibapi.contract import Contract, ContractDetails
+from ibapi.contract import Contract, ContractDetails, ComboLeg
 from ibapi.execution import Execution
 from ibapi.order import Order
 from ibapi.order_state import OrderState
@@ -305,6 +305,7 @@ class IbApi(EWrapper):
         self.gateway.write_log("IB TWS连接成功")
 
         self.load_contract_data()
+        self.subscribe_combo_spread()
 
         self.data_ready = False
 
@@ -319,6 +320,7 @@ class IbApi(EWrapper):
 
         if not self.orderid:
             self.orderid = orderId
+            print(self.orderid)
 
     def currentTime(self, time: int) -> None:
         """IB当前服务器时间回报"""
@@ -363,6 +365,7 @@ class IbApi(EWrapper):
     def tickPrice(self, reqId: TickerId, tickType: TickType, price: float, attrib: TickAttrib) -> None:
         """tick价格更新回报"""
         super().tickPrice(reqId, tickType, price, attrib)
+        print(reqId)
 
         if tickType not in TICKFIELD_IB2VT:
             return
@@ -483,6 +486,7 @@ class IbApi(EWrapper):
         mktCapPrice: float,
     ) -> None:
         """订单状态更新回报"""
+        print("orderStatus!!!!!!!!!!!!")
         super().orderStatus(
             orderId,
             status,
@@ -669,6 +673,7 @@ class IbApi(EWrapper):
 
         if contract.vt_symbol not in self.contracts:
             self.gateway.on_contract(contract)
+            print(ib_contract)
 
             self.contracts[contract.vt_symbol] = contract
 
@@ -1065,6 +1070,105 @@ class IbApi(EWrapper):
 
         self.ticks[self.reqid] = tick
         self.tick_exchange[self.reqid] = req.exchange
+
+    def subscribe_combo_spread(self) -> None:
+        """"""
+        legs: dict = {}
+        leg1 = self.contracts.get("574801288.SMART")
+        legs[leg1.symbol] = {
+            "currency": "USD",
+            "conId": leg1.symbol,
+            "exchange": leg1.exchange.value,
+            "ratio": 1
+        }
+        leg2 = self.contracts.get("522003685.SMART")
+        legs[leg2.symbol] = {
+            "currency": "USD",
+            "conId": leg2.symbol,
+            "exchange": leg2.exchange.value,
+            "ratio": -1
+        }
+
+        self.create_combo_spread(legs)
+
+    def create_combo_spread(self, legs: Dict) -> None:
+        """查询期权链合约数据"""
+        if not self.status:
+            return
+
+        ib_contract = Contract()
+        ib_contract.secType = "BAG"
+        combo_name = ""
+        combo_legs = []
+
+        for name, data in legs.items():
+            combo_leg = ComboLeg()
+            combo_leg.conId = data["conId"]
+
+            if data["ratio"] > 0:
+                combo_leg.ratio = data["ratio"]
+                combo_leg.action = "BUY"
+            elif data["ratio"] < 0:
+                combo_leg.ratio = data["ratio"] * -1
+                combo_leg.action = "SELL"
+
+            if not combo_name:
+                combo_name += name
+            elif name != combo_name:
+                combo_name += "," + combo_name
+
+            combo_legs.append(combo_leg)
+
+        ib_contract.symbol = "TSLA"
+        ib_contract.comboLegs = combo_legs
+        ib_contract.currency = data["currency"]
+        ib_contract.exchange = data["exchange"]
+
+        # 订阅tick数据并创建tick对象缓冲区
+        self.reqid += 1
+        self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])
+        print(self.reqid, "!!!!!!!!!!!!!!")
+
+        tick: TickData = TickData(
+            symbol="TSLA",
+            exchange=Exchange(data["exchange"]),
+            datetime=datetime.now(LOCAL_TZ),
+            gateway_name=self.gateway_name
+        )
+        tick.extra = {}
+
+        self.ticks[self.reqid] = tick
+        self.tick_exchange[self.reqid] = Exchange(data["exchange"])
+
+        # 委托
+        self.orderid = 20
+        self.orderid += 1
+
+        ib_order: Order = Order()
+        ib_order.orderId = self.orderid
+        ib_order.clientId = self.clientid
+        ib_order.action = "BUY"
+        ib_order.orderType = "LMT"
+        ib_order.totalQuantity = Decimal(1)
+        ib_order.lmtPrice = 0.06
+        ib_order.account = self.account
+        ib_order.orderRef = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        self.client.placeOrder(self.orderid, ib_contract, ib_order)
+        self.client.reqIds(1)
+
+        order: OrderData = OrderData(
+            symbol="TSLA",
+            exchange=Exchange(data["exchange"]),
+            orderid=str(self.orderid),
+            type=OrderType.LIMIT,
+            direction=Direction.LONG,
+            price=0.06,
+            volume=1,
+            gateway_name="IB",
+        )
+        self.gateway.on_order(order)
+        return order.vt_orderid
 
 
 def generate_ib_contract(symbol: str, exchange: Exchange) -> Optional[Contract]:
