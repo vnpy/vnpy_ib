@@ -670,7 +670,7 @@ class IbApi(EWrapper):
             self.contracts[contract.vt_symbol] = contract
 
         # 查询期权
-        if self.query_options and ib_contract.secType in {"STK", "FUT"}:
+        if self.query_options and ib_contract.secType in {"STK", "FUT", "IND"}:
             self.query_option_portfolio(ib_contract)
 
     def execDetails(self, reqId: int, contract: Contract, execution: Execution) -> None:
