@@ -816,6 +816,8 @@ class IbApi(EWrapper):
             return
 
         self.save_contract_data()
+        for contract in self.contracts.values():
+            contract.gateway_name = "IB"
 
         self.status = False
         self.client.disconnect()
