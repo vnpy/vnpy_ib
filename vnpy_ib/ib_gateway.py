@@ -1016,7 +1016,7 @@ class IbApi(EWrapper):
 
     def save_contract_data(self) -> None:
         """保存合约数据至本地"""
-        # 保存前确保所有合约数据接口名称为IB（PaperAccount模块兼容性处理）
+        # 保存前确保所有合约数据接口名称为IB，避免其他模块的处理影响
         contracts: dict[str, ContractData] = {}
         for vt_symbol, contract in self.contracts.items():
             c: ContractData = copy(contract)
@@ -1044,9 +1044,11 @@ class IbApi(EWrapper):
         fields.append(ib_contract.secType)
 
         symbol: str = JOIN_SYMBOL.join(fields)
+        exchange: Exchange = EXCHANGE_IB2VT.get(ib_contract.exchange, Exchange.SMART)
+        vt_symbol: str = f"{symbol}.{exchange.value}"
 
         # 在合约信息中找不到字符串风格代码，则使用数字代码
-        if symbol not in self.contracts:
+        if vt_symbol not in self.contracts:
             symbol = str(ib_contract.conId)
 
         return symbol
