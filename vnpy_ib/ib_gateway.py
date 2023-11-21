@@ -364,7 +364,7 @@ class IbApi(EWrapper):
 
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
-            self.gateway.write_log(f"tickPrice函数收到未订阅的tick，reqId：{reqId}")
+            self.gateway.write_log(f"tickPrice函数收到未订阅的推送，reqId：{reqId}")
             return
 
         name: str = TICKFIELD_IB2VT[tickType]
@@ -393,7 +393,7 @@ class IbApi(EWrapper):
 
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
-            self.gateway.write_log(f"tickSize函数收到未订阅的tick，reqId：{reqId}")
+            self.gateway.write_log(f"tickSize函数收到未订阅的推送，reqId：{reqId}")
             return
 
         name: str = TICKFIELD_IB2VT[tickType]
@@ -410,7 +410,7 @@ class IbApi(EWrapper):
 
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
-            self.gateway.write_log(f"tickString函数收到未订阅的tick，reqId：{reqId}")
+            self.gateway.write_log(f"tickString函数收到未订阅的推送，reqId：{reqId}")
             return
 
         dt: datetime = datetime.fromtimestamp(int(value))
@@ -449,7 +449,7 @@ class IbApi(EWrapper):
 
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
-            self.gateway.write_log(f"tickOptionComputation函数收到未订阅的tick，reqId：{reqId}")
+            self.gateway.write_log(f"tickOptionComputation函数收到未订阅的推送，reqId：{reqId}")
             return
 
         prefix: str = TICKFIELD_IB2VT[tickType]
@@ -477,7 +477,7 @@ class IbApi(EWrapper):
 
         tick: TickData = self.ticks(reqId, None)
         if not tick:
-            self.gateway.write_log(f"tickSnapshotEnd函数收到未订阅的tick，reqId：{reqId}")
+            self.gateway.write_log(f"tickSnapshotEnd函数收到未订阅的推送，reqId：{reqId}")
             return
 
         self.gateway.write_log(f"{tick.vt_symbol}行情切片查询成功")
@@ -1016,8 +1016,15 @@ class IbApi(EWrapper):
 
     def save_contract_data(self) -> None:
         """保存合约数据至本地"""
+        # 保存前确保所有合约数据接口名称为IB（PaperAccount模块兼容性处理）
+        contracts: dict[str, ContractData] = {}
+        for vt_symbol, contract in self.contracts.items():
+            c: ContractData = copy(contract)
+            c.gateway_name = "IB"
+            contracts[vt_symbol] = c
+
         f = shelve.open(self.data_filepath)
-        f["contracts"] = self.contracts
+        f["contracts"] = contracts
         f.close()
 
     def generate_symbol(self, ib_contract: Contract) -> str:
