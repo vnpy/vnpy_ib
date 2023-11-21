@@ -362,7 +362,11 @@ class IbApi(EWrapper):
         if tickType not in TICKFIELD_IB2VT:
             return
 
-        tick: TickData = self.ticks[reqId]
+        tick: TickData = self.ticks.get(reqId, None)
+        if not tick:
+            self.gateway.write_log(f"tickPrice函数收到未订阅的tick，reqId：{reqId}")
+            return
+
         name: str = TICKFIELD_IB2VT[tickType]
         setattr(tick, name, price)
 
@@ -387,7 +391,11 @@ class IbApi(EWrapper):
         if tickType not in TICKFIELD_IB2VT:
             return
 
-        tick: TickData = self.ticks[reqId]
+        tick: TickData = self.ticks.get(reqId, None)
+        if not tick:
+            self.gateway.write_log(f"tickSize函数收到未订阅的tick，reqId：{reqId}")
+            return
+
         name: str = TICKFIELD_IB2VT[tickType]
         setattr(tick, name, float(size))
 
@@ -400,7 +408,11 @@ class IbApi(EWrapper):
         if tickType != TickTypeEnum.LAST_TIMESTAMP:
             return
 
-        tick: TickData = self.ticks[reqId]
+        tick: TickData = self.ticks.get(reqId, None)
+        if not tick:
+            self.gateway.write_log(f"tickString函数收到未订阅的tick，reqId：{reqId}")
+            return
+
         dt: datetime = datetime.fromtimestamp(int(value))
         tick.datetime = dt.replace(tzinfo=LOCAL_TZ)
 
@@ -435,7 +447,11 @@ class IbApi(EWrapper):
             undPrice,
         )
 
-        tick: TickData = self.ticks[reqId]
+        tick: TickData = self.ticks.get(reqId, None)
+        if not tick:
+            self.gateway.write_log(f"tickOptionComputation函数收到未订阅的tick，reqId：{reqId}")
+            return
+
         prefix: str = TICKFIELD_IB2VT[tickType]
 
         tick.extra["underlying_price"] = undPrice
@@ -459,7 +475,11 @@ class IbApi(EWrapper):
         """行情切片查询返回完毕"""
         super().tickSnapshotEnd(reqId)
 
-        tick: TickData = self.ticks[reqId]
+        tick: TickData = self.ticks(reqId, None)
+        if not tick:
+            self.gateway.write_log(f"tickSnapshotEnd函数收到未订阅的tick，reqId：{reqId}")
+            return
+
         self.gateway.write_log(f"{tick.vt_symbol}行情切片查询成功")
 
     def orderStatus(
