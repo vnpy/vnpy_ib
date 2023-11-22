@@ -475,7 +475,7 @@ class IbApi(EWrapper):
         """行情切片查询返回完毕"""
         super().tickSnapshotEnd(reqId)
 
-        tick: TickData = self.ticks(reqId, None)
+        tick: TickData = self.ticks.get(reqId, None)
         if not tick:
             self.gateway.write_log(f"tickSnapshotEnd函数收到未订阅的tick，reqId：{reqId}")
             return
