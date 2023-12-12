@@ -89,9 +89,13 @@ ORDERTYPE_IB2VT: Dict[str, OrderType] = {v: k for k, v in ORDERTYPE_VT2IB.items(
 EXCHANGE_VT2IB: Dict[Exchange, str] = {
     Exchange.SMART: "SMART",
     Exchange.NYMEX: "NYMEX",
+    Exchange.NYBOT: "NYBOT",
+    Exchange.COMEX: "COMEX",
     Exchange.GLOBEX: "GLOBEX",
     Exchange.IDEALPRO: "IDEALPRO",
     Exchange.CME: "CME",
+    Exchange.CBOT: "CBOT",
+    Exchange.CBOE: "CBOE",
     Exchange.ICE: "ICE",
     Exchange.SEHK: "SEHK",
     Exchange.SSE: "SEHKNTL",
@@ -110,8 +114,10 @@ EXCHANGE_VT2IB: Dict[Exchange, str] = {
     Exchange.IBKRATS: "IBKRATS",
     Exchange.OTC: "PINK",
     Exchange.SGX: "SGX",
-    Exchange.CBOE: "CBOE",
-    Exchange.CBOT: "CBOT"
+    Exchange.SNFE: "SNFE",
+    Exchange.LMEOTC: "LMEOTC",
+    Exchange.EUREX: "EUREX",
+    Exchange.IPE: "IPE",
 }
 EXCHANGE_IB2VT: Dict[str, Exchange] = {v: k for k, v in EXCHANGE_VT2IB.items()}
 
