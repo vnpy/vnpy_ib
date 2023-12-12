@@ -166,6 +166,8 @@ TICKFIELD_IB2VT: Dict[int, str] = {
     12: "last",
     13: "model",
     14: "open_price",
+    22: "open_interest",
+    86: "futures_open_interest"
 }
 
 # 账户类型映射
@@ -404,6 +406,8 @@ class IbApi(EWrapper):
             return
 
         name: str = TICKFIELD_IB2VT[tickType]
+        if name == "futures_open_interest":
+            name = "open_interest"
         setattr(tick, name, float(size))
 
         self.gateway.on_tick(copy(tick))
@@ -897,7 +901,8 @@ class IbApi(EWrapper):
 
         #  订阅tick数据并创建tick对象缓冲区
         self.reqid += 1
-        self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])
+        # self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])# lance
+        self.client.reqMktData(self.reqid, ib_contract, "101", False, False, [])# lance
 
         tick: TickData = TickData(
             symbol=req.symbol,
