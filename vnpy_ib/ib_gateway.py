@@ -982,8 +982,14 @@ class IbApi(EWrapper):
         end_str: str = end.strftime("%Y%m%d %H:%M:%S") + " " + get_localzone_name()
 
         delta: timedelta = end - req.start
-        days: int = min(delta.days, 180)     # IB 只提供6个月数据
-        duration: str = f"{days} D"
+        # days: int = min(delta.days, 180)     # IB 只提供6个月数据
+        # duration: str = f"{days} D"
+        days: int = delta.days
+        if days < 365:
+            duration: str = f"{days} D"
+        else:
+            duration: str = f"{delta.days/365:.0f} Y"
+
         bar_size: str = INTERVAL_VT2IB[req.interval]
 
         if contract.product in [Product.SPOT, Product.FOREX]:
