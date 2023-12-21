@@ -89,6 +89,7 @@ ORDERTYPE_IB2VT: Dict[str, OrderType] = {v: k for k, v in ORDERTYPE_VT2IB.items(
 EXCHANGE_VT2IB: Dict[Exchange, str] = {
     Exchange.SMART: "SMART",
     Exchange.NYMEX: "NYMEX",
+    Exchange.COMEX: "COMEX",
     Exchange.GLOBEX: "GLOBEX",
     Exchange.IDEALPRO: "IDEALPRO",
     Exchange.CME: "CME",
