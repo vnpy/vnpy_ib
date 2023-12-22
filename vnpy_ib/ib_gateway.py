@@ -112,7 +112,8 @@ EXCHANGE_VT2IB: Dict[Exchange, str] = {
     Exchange.OTC: "PINK",
     Exchange.SGX: "SGX",
     Exchange.CBOE: "CBOE",
-    Exchange.CBOT: "CBOT"
+    Exchange.CBOT: "CBOT",
+    Exchange.COMEX: "COMEX"
 }
 EXCHANGE_IB2VT: Dict[str, Exchange] = {v: k for k, v in EXCHANGE_VT2IB.items()}
 
@@ -877,7 +878,11 @@ class IbApi(EWrapper):
         self.subscribed[req.vt_symbol] = req
 
         # 解析IB合约详情
-        ib_contract: Contract = generate_ib_contract(req.symbol, req.exchange)
+        try:
+            ib_contract: Contract = generate_ib_contract(req.symbol, req.exchange)
+        except Exception as e:
+            self.gateway.write_log(str(e))
+            return
         if not ib_contract:
             self.gateway.write_log("代码解析失败，请检查格式是否正确")
             return
@@ -1104,6 +1109,9 @@ def generate_ib_contract(symbol: str, exchange: Exchange) -> Optional[Contract]:
     else:
         ib_contract: Contract = Contract()
         ib_contract.exchange = EXCHANGE_VT2IB[exchange]
-        ib_contract.conId = symbol
+        if symbol.isdigit():
+            ib_contract.conId = symbol
+        else:
+            raise ValueError(f"Conid类型代码必须是纯数字, 请检查代码 `{symbol}` 是否正确！")
 
     return ib_contract
