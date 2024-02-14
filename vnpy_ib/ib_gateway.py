@@ -950,7 +950,7 @@ class IbApi(EWrapper):
 
         self.client.cancelOrder(int(req.orderid), "")
 
-    def query_history(self, req: HistoryRequest) -> List[BarData]:
+    def query_history(self, req: HistoryRequest, connection_wait_time=None) -> List[BarData]:
         """查询历史数据"""
         contract: ContractData = self.contracts[req.vt_symbol]
         if not contract:
@@ -995,7 +995,7 @@ class IbApi(EWrapper):
         )
 
         self.history_condition.acquire()    # 等待异步数据返回
-        self.history_condition.wait(60)
+        self.history_condition.wait(connection_wait_time)
         self.history_condition.release()
 
         history: List[BarData] = self.history_buf
