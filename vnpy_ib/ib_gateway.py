@@ -872,6 +872,10 @@ class IbApi(EWrapper):
             self.gateway.write_log(f"不支持的交易所{req.exchange}")
             return
 
+        if " " in req.symbol:
+            self.gateway.write_log("订阅失败，合约代码中包含空格")
+            return
+
         # 过滤重复订阅
         if req.vt_symbol in self.subscribed:
             return
@@ -920,6 +924,10 @@ class IbApi(EWrapper):
 
         if req.type not in ORDERTYPE_VT2IB:
             self.gateway.write_log(f"不支持的价格类型：{req.type}")
+            return ""
+
+        if " " in req.symbol:
+            self.gateway.write_log("委托失败，合约代码中包含空格")
             return ""
 
         self.orderid += 1
