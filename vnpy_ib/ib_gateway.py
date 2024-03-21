@@ -130,7 +130,8 @@ PRODUCT_IB2VT: Dict[str, Product] = {
     "OPT": Product.OPTION,
     "FOP": Product.OPTION,
     "CONTFUT": Product.FUTURES,
-    "IND": Product.INDEX
+    "IND": Product.INDEX,
+    "CFD": Product.CFD
 }
 
 # 期权类型映射
@@ -901,13 +902,21 @@ class IbApi(EWrapper):
             self.gateway.write_log(f"不支持的交易所{req.exchange}")
             return
 
+        if " " in req.symbol:
+            self.gateway.write_log("订阅失败，合约代码中包含空格")
+            return
+
         # 过滤重复订阅
         if req.vt_symbol in self.subscribed:
             return
         self.subscribed[req.vt_symbol] = req
 
         # 解析IB合约详情
-        ib_contract: Contract = generate_ib_contract(req.symbol, req.exchange)
+        try:
+            ib_contract: Contract = generate_ib_contract(req.symbol, req.exchange)
+        except Exception as e:
+            self.gateway.write_log(str(e))
+            return
         if not ib_contract:
             self.gateway.write_log("代码解析失败，请检查格式是否正确")
             return
@@ -946,6 +955,10 @@ class IbApi(EWrapper):
 
         if req.type not in ORDERTYPE_VT2IB:
             self.gateway.write_log(f"不支持的价格类型：{req.type}")
+            return ""
+
+        if " " in req.symbol:
+            self.gateway.write_log("委托失败，合约代码中包含空格")
             return ""
 
         self.orderid += 1
@@ -1141,6 +1154,9 @@ def generate_ib_contract(symbol: str, exchange: Exchange) -> Optional[Contract]:
     else:
         ib_contract: Contract = Contract()
         ib_contract.exchange = EXCHANGE_VT2IB[exchange]
-        ib_contract.conId = symbol
+        if symbol.isdigit():
+            ib_contract.conId = symbol
+        else:
+            raise ValueError(f"Conid类型代码必须是纯数字, 请检查代码 `{symbol}` 是否正确！")
 
     return ib_contract
