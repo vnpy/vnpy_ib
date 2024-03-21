@@ -89,10 +89,13 @@ ORDERTYPE_IB2VT: Dict[str, OrderType] = {v: k for k, v in ORDERTYPE_VT2IB.items(
 EXCHANGE_VT2IB: Dict[Exchange, str] = {
     Exchange.SMART: "SMART",
     Exchange.NYMEX: "NYMEX",
+    Exchange.NYBOT: "NYBOT",
     Exchange.COMEX: "COMEX",
     Exchange.GLOBEX: "GLOBEX",
     Exchange.IDEALPRO: "IDEALPRO",
     Exchange.CME: "CME",
+    Exchange.CBOT: "CBOT",
+    Exchange.CBOE: "CBOE",
     Exchange.ICE: "ICE",
     Exchange.SEHK: "SEHK",
     Exchange.SSE: "SEHKNTL",
@@ -111,9 +114,10 @@ EXCHANGE_VT2IB: Dict[Exchange, str] = {
     Exchange.IBKRATS: "IBKRATS",
     Exchange.OTC: "PINK",
     Exchange.SGX: "SGX",
-    Exchange.CBOE: "CBOE",
-    Exchange.CBOT: "CBOT",
-    Exchange.COMEX: "COMEX"
+    Exchange.SNFE: "SNFE",
+    Exchange.LMEOTC: "LMEOTC",
+    Exchange.EUREX: "EUREX",
+    Exchange.IPE: "IPE",
 }
 EXCHANGE_IB2VT: Dict[str, Exchange] = {v: k for k, v in EXCHANGE_VT2IB.items()}
 
@@ -163,6 +167,8 @@ TICKFIELD_IB2VT: Dict[int, str] = {
     12: "last",
     13: "model",
     14: "open_price",
+    22: "open_interest",
+    86: "futures_open_interest"
 }
 
 # 账户类型映射
@@ -286,6 +292,9 @@ class IbApi(EWrapper):
         self.orders: Dict[str, OrderData] = {}
         self.accounts: Dict[str, AccountData] = {}
         self.contracts: Dict[str, ContractData] = {}
+        # self.tradinghours: Dict[str, str] = {}
+        self.contract_info = {}
+        self.contract_dict = {}
 
         self.subscribed: Dict[str, SubscribeRequest] = {}
         self.data_ready: bool = False
@@ -401,6 +410,8 @@ class IbApi(EWrapper):
             return
 
         name: str = TICKFIELD_IB2VT[tickType]
+        if name == "futures_open_interest":
+            name = "open_interest"
         setattr(tick, name, float(size))
 
         self.gateway.on_tick(copy(tick))
@@ -697,6 +708,24 @@ class IbApi(EWrapper):
         if self.query_options and ib_contract.secType in {"STK", "FUT", "IND"}:
             self.query_option_portfolio(ib_contract)
 
+        # self.tradinghours[contract.vt_symbol] = {'tradingHours': contractDetails.tradingHours,
+        #                                          'liquidHours': contractDetails.liquidHours,
+        #                                          'timezone': contractDetails.timeZoneId,
+        #                                          'mintick': contractDetails.minTick}
+
+        if str(contractDetails.contract.lastTradeDateOrContractMonth) not in contract.vt_symbol:
+            contract_raw = contract.vt_symbol.split('-')
+            contract_raw[0] = contract_raw[0]+'-'+str(contractDetails.contract.lastTradeDateOrContractMonth)
+            contract_exct = '-'.join(contract_raw)
+            self.contract_info[contract_exct] = contractDetails.__dict__
+            if str(contractDetails.contract.conId) not in contract.vt_symbol:
+                if contract.vt_symbol not in self.contract_dict:
+                    self.contract_dict[contract.vt_symbol] = [contract_exct]
+                elif contract_exct not in self.contract_dict[contract.vt_symbol]:
+                    self.contract_dict[contract.vt_symbol].append(contract_exct)
+        else:
+            self.contract_info[contract.vt_symbol] = contractDetails.__dict__
+
     def execDetails(self, reqId: int, contract: Contract, execution: Execution) -> None:
         """交易数据更新回报"""
         super().execDetails(reqId, contract, execution)
@@ -902,7 +931,8 @@ class IbApi(EWrapper):
 
         #  订阅tick数据并创建tick对象缓冲区
         self.reqid += 1
-        self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])
+        # self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])# lance
+        self.client.reqMktData(self.reqid, ib_contract, "101", False, False, [])# lance
 
         tick: TickData = TickData(
             symbol=req.symbol,
@@ -986,8 +1016,14 @@ class IbApi(EWrapper):
         end_str: str = end.strftime("%Y%m%d %H:%M:%S") + " " + get_localzone_name()
 
         delta: timedelta = end - req.start
-        days: int = min(delta.days, 180)     # IB 只提供6个月数据
-        duration: str = f"{days} D"
+        # days: int = min(delta.days, 180)     # IB 只提供6个月数据
+        # duration: str = f"{days} D"
+        days: int = delta.days
+        if days < 365:
+            duration: str = f"{days} D"
+        else:
+            duration: str = f"{delta.days/365:.0f} Y"
+
         bar_size: str = INTERVAL_VT2IB[req.interval]
 
         if contract.product in [Product.SPOT, Product.FOREX]:
