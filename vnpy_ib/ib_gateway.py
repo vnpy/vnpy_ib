@@ -15,7 +15,7 @@ ConId is also supported for symbol.
 from copy import copy
 from datetime import datetime, timedelta
 from threading import Thread, Condition
-from typing import Optional, Dict, Any, List
+from typing import Optional
 from decimal import Decimal
 import shelve
 from tzlocal import get_localzone_name
@@ -60,7 +60,7 @@ from vnpy.trader.event import EVENT_TIMER
 from vnpy.event import Event
 
 # 委托状态映射
-STATUS_IB2VT: Dict[str, Status] = {
+STATUS_IB2VT: dict[str, Status] = {
     "ApiPending": Status.SUBMITTING,
     "PendingSubmit": Status.SUBMITTING,
     "PreSubmitted": Status.NOTTRADED,
@@ -72,21 +72,21 @@ STATUS_IB2VT: Dict[str, Status] = {
 }
 
 # 多空方向映射
-DIRECTION_VT2IB: Dict[Direction, str] = {Direction.LONG: "BUY", Direction.SHORT: "SELL"}
-DIRECTION_IB2VT: Dict[str, Direction] = {v: k for k, v in DIRECTION_VT2IB.items()}
+DIRECTION_VT2IB: dict[Direction, str] = {Direction.LONG: "BUY", Direction.SHORT: "SELL"}
+DIRECTION_IB2VT: dict[str, Direction] = {v: k for k, v in DIRECTION_VT2IB.items()}
 DIRECTION_IB2VT["BOT"] = Direction.LONG
 DIRECTION_IB2VT["SLD"] = Direction.SHORT
 
 # 委托类型映射
-ORDERTYPE_VT2IB: Dict[OrderType, str] = {
+ORDERTYPE_VT2IB: dict[OrderType, str] = {
     OrderType.LIMIT: "LMT",
     OrderType.MARKET: "MKT",
     OrderType.STOP: "STP"
 }
-ORDERTYPE_IB2VT: Dict[str, OrderType] = {v: k for k, v in ORDERTYPE_VT2IB.items()}
+ORDERTYPE_IB2VT: dict[str, OrderType] = {v: k for k, v in ORDERTYPE_VT2IB.items()}
 
 # 交易所映射
-EXCHANGE_VT2IB: Dict[Exchange, str] = {
+EXCHANGE_VT2IB: dict[Exchange, str] = {
     Exchange.SMART: "SMART",
     Exchange.NYMEX: "NYMEX",
     Exchange.COMEX: "COMEX",
@@ -115,10 +115,10 @@ EXCHANGE_VT2IB: Dict[Exchange, str] = {
     Exchange.SGX: "SGX",
     Exchange.EUREX: "EUREX",
 }
-EXCHANGE_IB2VT: Dict[str, Exchange] = {v: k for k, v in EXCHANGE_VT2IB.items()}
+EXCHANGE_IB2VT: dict[str, Exchange] = {v: k for k, v in EXCHANGE_VT2IB.items()}
 
 # 产品类型映射
-PRODUCT_IB2VT: Dict[str, Product] = {
+PRODUCT_IB2VT: dict[str, Product] = {
     "STK": Product.EQUITY,
     "CASH": Product.FOREX,
     "CMDTY": Product.SPOT,
@@ -131,7 +131,7 @@ PRODUCT_IB2VT: Dict[str, Product] = {
 }
 
 # 期权类型映射
-OPTION_IB2VT: Dict[str, OptionType] = {
+OPTION_IB2VT: dict[str, OptionType] = {
     "C": OptionType.CALL,
     "CALL": OptionType.CALL,
     "P": OptionType.PUT,
@@ -139,7 +139,7 @@ OPTION_IB2VT: Dict[str, OptionType] = {
 }
 
 # 货币类型映射
-CURRENCY_VT2IB: Dict[Currency, str] = {
+CURRENCY_VT2IB: dict[Currency, str] = {
     Currency.USD: "USD",
     Currency.CAD: "CAD",
     Currency.CNY: "CNY",
@@ -147,7 +147,7 @@ CURRENCY_VT2IB: Dict[Currency, str] = {
 }
 
 # 切片数据字段映射
-TICKFIELD_IB2VT: Dict[int, str] = {
+TICKFIELD_IB2VT: dict[int, str] = {
     0: "bid_volume_1",
     1: "bid_price_1",
     2: "ask_price_1",
@@ -167,7 +167,7 @@ TICKFIELD_IB2VT: Dict[int, str] = {
 }
 
 # 账户类型映射
-ACCOUNTFIELD_IB2VT: Dict[str, str] = {
+ACCOUNTFIELD_IB2VT: dict[str, str] = {
     "NetLiquidationByCurrency": "balance",
     "NetLiquidation": "balance",
     "UnrealizedPnL": "positionProfit",
@@ -176,7 +176,7 @@ ACCOUNTFIELD_IB2VT: Dict[str, str] = {
 }
 
 # 数据频率映射
-INTERVAL_VT2IB: Dict[Interval, str] = {
+INTERVAL_VT2IB: dict[Interval, str] = {
     Interval.MINUTE: "1 min",
     Interval.HOUR: "1 hour",
     Interval.DAILY: "1 day",
@@ -194,7 +194,7 @@ class IbGateway(BaseGateway):
 
     default_name: str = "IB"
 
-    default_setting: Dict[str, Any] = {
+    default_setting: dict = {
         "TWS地址": "127.0.0.1",
         "TWS端口": 7497,
         "客户号": 1,
@@ -202,7 +202,7 @@ class IbGateway(BaseGateway):
         "查询期权": ["否", "是"]
     }
 
-    exchanges: List[str] = list(EXCHANGE_VT2IB.keys())
+    exchanges: list[str] = list(EXCHANGE_VT2IB.keys())
 
     def __init__(self, event_engine: EventEngine, gateway_name: str) -> None:
         """构造函数"""
@@ -247,7 +247,7 @@ class IbGateway(BaseGateway):
         """查询持仓"""
         pass
 
-    def query_history(self, req: HistoryRequest) -> List[BarData]:
+    def query_history(self, req: HistoryRequest) -> list[BarData]:
         """查询历史数据"""
         return self.api.query_history(req)
 
@@ -283,17 +283,17 @@ class IbApi(EWrapper):
         self.account: str = ""
         self.query_options: bool = False
 
-        self.ticks: Dict[int, TickData] = {}
-        self.orders: Dict[str, OrderData] = {}
-        self.accounts: Dict[str, AccountData] = {}
-        self.contracts: Dict[str, ContractData] = {}
+        self.ticks: dict[int, TickData] = {}
+        self.orders: dict[str, OrderData] = {}
+        self.accounts: dict[str, AccountData] = {}
+        self.contracts: dict[str, ContractData] = {}
 
-        self.subscribed: Dict[str, SubscribeRequest] = {}
+        self.subscribed: dict[str, SubscribeRequest] = {}
         self.data_ready: bool = False
 
         self.history_req: HistoryRequest = None
         self.history_condition: Condition = Condition()
-        self.history_buf: List[BarData] = []
+        self.history_buf: list[BarData] = []
 
         self.reqid_symbol_map: dict[int, str] = {}
 
@@ -966,7 +966,7 @@ class IbApi(EWrapper):
 
         self.client.cancelOrder(int(req.orderid), "")
 
-    def query_history(self, req: HistoryRequest) -> List[BarData]:
+    def query_history(self, req: HistoryRequest) -> list[BarData]:
         """查询历史数据"""
         contract: ContractData = self.contracts[req.vt_symbol]
         if not contract:
@@ -1018,8 +1018,8 @@ class IbApi(EWrapper):
         self.history_condition.wait(60)
         self.history_condition.release()
 
-        history: List[BarData] = self.history_buf
-        self.history_buf: List[BarData] = []       # 创新新的缓冲列表
+        history: list[BarData] = self.history_buf
+        self.history_buf: list[BarData] = []       # 创新新的缓冲列表
         self.history_req: HistoryRequest = None
 
         return history
