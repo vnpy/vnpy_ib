@@ -1116,11 +1116,11 @@ def generate_ib_contract(symbol: str, exchange: Exchange) -> Optional[Contract]:
             ib_contract = None
     # 数字代码（ConId）
     else:
-        ib_contract: Contract = Contract()
-        ib_contract.exchange = EXCHANGE_VT2IB[exchange]
         if symbol.isdigit():
+            ib_contract: Contract = Contract()
+            ib_contract.exchange = EXCHANGE_VT2IB[exchange]
             ib_contract.conId = symbol
         else:
-            raise ValueError(f"Conid类型代码必须是纯数字, 请检查代码 `{symbol}` 是否正确！")
+            ib_contract = None
 
     return ib_contract
