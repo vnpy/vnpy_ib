@@ -736,12 +736,12 @@ class IbApi(EWrapper):
 
         self.gateway.on_trade(trade)
 
-    def managedAccounts(self, accountslist: str) -> None:
+    def managedAccounts(self, accountsList: str) -> None:
         """所有子账户回报"""
-        super().managedAccounts(accountslist)
+        super().managedAccounts(accountsList)
 
         if not self.account:
-            for account_code in accountslist.split(","):
+            for account_code in accountsList.split(","):
                 if account_code:
                     self.account = account_code
 
