@@ -884,11 +884,7 @@ class IbApi(EWrapper):
         self.subscribed[req.vt_symbol] = req
 
         # 解析IB合约详情
-        try:
-            ib_contract: Contract = generate_ib_contract(req.symbol, req.exchange)
-        except Exception as e:
-            self.gateway.write_log(str(e))
-            return
+        ib_contract: Contract = generate_ib_contract(req.symbol, req.exchange)
         if not ib_contract:
             self.gateway.write_log("代码解析失败，请检查格式是否正确")
             return
