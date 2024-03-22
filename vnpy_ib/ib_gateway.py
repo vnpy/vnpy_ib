@@ -114,6 +114,7 @@ EXCHANGE_VT2IB: dict[Exchange, str] = {
     Exchange.OTC: "PINK",
     Exchange.SGX: "SGX",
     Exchange.EUREX: "EUREX",
+    Exchange.TWSE: "TWSE",
 }
 EXCHANGE_IB2VT: dict[str, Exchange] = {v: k for k, v in EXCHANGE_VT2IB.items()}
 
