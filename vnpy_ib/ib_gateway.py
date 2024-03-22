@@ -903,8 +903,7 @@ class IbApi(EWrapper):
 
         #  订阅tick数据并创建tick对象缓冲区
         self.reqid += 1
-        # self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])# lance
-        self.client.reqMktData(self.reqid, ib_contract, "101", False, False, [])# lance
+        self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])
 
         tick: TickData = TickData(
             symbol=req.symbol,
@@ -988,8 +987,6 @@ class IbApi(EWrapper):
         end_str: str = end.strftime("%Y%m%d %H:%M:%S") + " " + get_localzone_name()
 
         delta: timedelta = end - req.start
-        # days: int = min(delta.days, 180)     # IB 只提供6个月数据
-        # duration: str = f"{days} D"
         days: int = delta.days
         if days < 365:
             duration: str = f"{days} D"
