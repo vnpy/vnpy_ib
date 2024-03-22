@@ -163,8 +163,7 @@ TICKFIELD_IB2VT: Dict[int, str] = {
     12: "last",
     13: "model",
     14: "open_price",
-    22: "open_interest",
-    86: "futures_open_interest"
+    86: "open_interest"
 }
 
 # 账户类型映射
@@ -288,9 +287,6 @@ class IbApi(EWrapper):
         self.orders: Dict[str, OrderData] = {}
         self.accounts: Dict[str, AccountData] = {}
         self.contracts: Dict[str, ContractData] = {}
-        # self.tradinghours: Dict[str, str] = {}
-        self.contract_info = {}
-        self.contract_dict = {}
 
         self.subscribed: Dict[str, SubscribeRequest] = {}
         self.data_ready: bool = False
@@ -406,8 +402,6 @@ class IbApi(EWrapper):
             return
 
         name: str = TICKFIELD_IB2VT[tickType]
-        if name == "futures_open_interest":
-            name = "open_interest"
         setattr(tick, name, float(size))
 
         self.gateway.on_tick(copy(tick))
@@ -703,24 +697,6 @@ class IbApi(EWrapper):
         # 查询期权
         if self.query_options and ib_contract.secType in {"STK", "FUT", "IND"}:
             self.query_option_portfolio(ib_contract)
-
-        # self.tradinghours[contract.vt_symbol] = {'tradingHours': contractDetails.tradingHours,
-        #                                          'liquidHours': contractDetails.liquidHours,
-        #                                          'timezone': contractDetails.timeZoneId,
-        #                                          'mintick': contractDetails.minTick}
-
-        if str(contractDetails.contract.lastTradeDateOrContractMonth) not in contract.vt_symbol:
-            contract_raw = contract.vt_symbol.split('-')
-            contract_raw[0] = contract_raw[0]+'-'+str(contractDetails.contract.lastTradeDateOrContractMonth)
-            contract_exct = '-'.join(contract_raw)
-            self.contract_info[contract_exct] = contractDetails.__dict__
-            if str(contractDetails.contract.conId) not in contract.vt_symbol:
-                if contract.vt_symbol not in self.contract_dict:
-                    self.contract_dict[contract.vt_symbol] = [contract_exct]
-                elif contract_exct not in self.contract_dict[contract.vt_symbol]:
-                    self.contract_dict[contract.vt_symbol].append(contract_exct)
-        else:
-            self.contract_info[contract.vt_symbol] = contractDetails.__dict__
 
     def execDetails(self, reqId: int, contract: Contract, execution: Execution) -> None:
         """交易数据更新回报"""
