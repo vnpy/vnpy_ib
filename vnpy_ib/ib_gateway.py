@@ -114,6 +114,10 @@ EXCHANGE_VT2IB: dict[Exchange, str] = {
     Exchange.OTC: "PINK",
     Exchange.SGX: "SGX",
     Exchange.EUREX: "EUREX",
+    Exchange.SNFE: "SNFE",
+    Exchange.LMEOTC: "LMEOTC",
+    Exchange.NYBOT: "NYBOT",
+    Exchange.IPE: "IPE",
     Exchange.TWSE: "TWSE",
 }
 EXCHANGE_IB2VT: dict[str, Exchange] = {v: k for k, v in EXCHANGE_VT2IB.items()}
@@ -196,7 +200,7 @@ class IbGateway(BaseGateway):
     default_name: str = "IB"
 
     default_setting: dict = {
-        "TWS地址": "127.0.0.1",
+        "TWS地址": "localhost",
         "TWS端口": 7497,
         "客户号": 1,
         "交易账户": "",
@@ -288,6 +292,9 @@ class IbApi(EWrapper):
         self.orders: dict[str, OrderData] = {}
         self.accounts: dict[str, AccountData] = {}
         self.contracts: dict[str, ContractData] = {}
+        # self.tradinghours: Dict[str, str] = {}
+        self.contract_info = {}
+        self.contract_dict = {}
 
         self.subscribed: dict[str, SubscribeRequest] = {}
         self.data_ready: bool = False
@@ -366,6 +373,10 @@ class IbApi(EWrapper):
         super().tickPrice(reqId, tickType, price, attrib)
 
         if tickType not in TICKFIELD_IB2VT:
+            # # 打印tick的所有信息
+            # print(self.ticks[reqId].__str__())
+            # # 打印传入的所有信息
+            # print(f'reqId: {reqId}, tickType: {tickType}, price: {price}, attrib: {attrib}')
             return
 
         tick: TickData = self.ticks.get(reqId, None)
@@ -395,6 +406,10 @@ class IbApi(EWrapper):
         super().tickSize(reqId, tickType, size)
 
         if tickType not in TICKFIELD_IB2VT:
+            # # 打印tick的所有信息
+            # print(self.ticks[reqId].__str__())
+            # # 打印传入的所有信息
+            # print(f'reqId: {reqId}, tickType: {tickType}, size: {size}')
             return
 
         tick: TickData = self.ticks.get(reqId, None)
@@ -412,6 +427,8 @@ class IbApi(EWrapper):
         super().tickString(reqId, tickType, value)
 
         if tickType != TickTypeEnum.LAST_TIMESTAMP:
+            # print(self.ticks[reqId].__str__())
+            # print(f'reqId: {reqId}, tickType: {tickType}, value: {value}')
             return
 
         tick: TickData = self.ticks.get(reqId, None)
@@ -647,6 +664,9 @@ class IbApi(EWrapper):
     def contractDetails(self, reqId: int, contractDetails: ContractDetails) -> None:
         """合约数据更新回报"""
         super().contractDetails(reqId, contractDetails)
+        # print(contractDetails.__str__())
+        # if contractDetails.contract.secType=="CONTFUT":
+        #     print(contractDetails.__str__())
 
         # 提取合约信息
         ib_contract: Contract = contractDetails.contract
@@ -656,11 +676,12 @@ class IbApi(EWrapper):
             ib_contract.multiplier = 1
 
         # 字符串风格的代码，需要从缓存中获取
-        if reqId in self.reqid_symbol_map:
-            symbol: str = self.reqid_symbol_map[reqId]
+        if reqId in self.reqid_symbol_map:# 不允许使用数字代码 lance
+            symbol: str = self.reqid_symbol_map[reqId]# 不允许使用数字代码 lance
         # 否则默认使用数字风格代码
-        else:
-            symbol: str = str(ib_contract.conId)
+        else:# 不允许使用数字代码 lance
+            symbol: str = str(ib_contract.conId)# 不允许使用数字代码 lance
+        # symbol: str = self.generate_symbol(ib_contract)# 不允许使用数字代码 lance
 
         # 生成合约
         contract: ContractData = ContractData(
@@ -671,6 +692,7 @@ class IbApi(EWrapper):
             size=int(ib_contract.multiplier),
             pricetick=contractDetails.minTick,
             min_volume=contractDetails.minSize,
+            # min_volume=1,
             net_position=True,
             history_data=True,
             stop_supported=True,
@@ -698,6 +720,24 @@ class IbApi(EWrapper):
         # 查询期权
         if self.query_options and ib_contract.secType in {"STK", "FUT", "IND"}:
             self.query_option_portfolio(ib_contract)
+
+        # self.tradinghours[contract.vt_symbol] = {'tradingHours': contractDetails.tradingHours,
+        #                                          'liquidHours': contractDetails.liquidHours,
+        #                                          'timezone': contractDetails.timeZoneId,
+        #                                          'mintick': contractDetails.minTick}
+
+        if str(contractDetails.contract.lastTradeDateOrContractMonth) not in contract.vt_symbol:
+            contract_raw = contract.vt_symbol.split('-')
+            contract_raw[0] = contract_raw[0]+'-'+str(contractDetails.contract.lastTradeDateOrContractMonth)
+            contract_exct = '-'.join(contract_raw)
+            self.contract_info[contract_exct] = contractDetails.__dict__
+            if str(contractDetails.contract.conId) not in contract.vt_symbol:
+                if contract.vt_symbol not in self.contract_dict:
+                    self.contract_dict[contract.vt_symbol] = [contract_exct]
+                elif contract_exct not in self.contract_dict[contract.vt_symbol]:
+                    self.contract_dict[contract.vt_symbol].append(contract_exct)
+        else:
+            self.contract_info[contract.vt_symbol] = contractDetails.__dict__
 
     def execDetails(self, reqId: int, contract: Contract, execution: Execution) -> None:
         """交易数据更新回报"""
@@ -890,6 +930,9 @@ class IbApi(EWrapper):
             self.gateway.write_log("代码解析失败，请检查格式是否正确")
             return
 
+        # #TODO 这边暂时强制修改sectype
+        # ib_contract.secType = "FUT+CONTFUT" # CONTFUT：连续合约；FUT：期货合约
+
         # 通过TWS查询合约信息
         self.reqid += 1
         self.client.reqContractDetails(self.reqid, ib_contract)
@@ -900,7 +943,8 @@ class IbApi(EWrapper):
 
         #  订阅tick数据并创建tick对象缓冲区
         self.reqid += 1
-        self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])
+        # self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])# lance
+        self.client.reqMktData(self.reqid, ib_contract, "101", False, False, [])# lance
 
         tick: TickData = TickData(
             symbol=req.symbol,
@@ -984,6 +1028,8 @@ class IbApi(EWrapper):
         end_str: str = end.strftime("%Y%m%d %H:%M:%S") + " " + get_localzone_name()
 
         delta: timedelta = end - req.start
+        # days: int = min(delta.days, 180)     # IB 只提供6个月数据
+        # duration: str = f"{days} D"
         days: int = delta.days
         if days < 365:
             duration: str = f"{days} D"
@@ -1066,8 +1112,8 @@ class IbApi(EWrapper):
         vt_symbol: str = f"{symbol}.{exchange.value}"
 
         # 在合约信息中找不到字符串风格代码，则使用数字代码
-        if vt_symbol not in self.contracts:
-            symbol = str(ib_contract.conId)
+        if vt_symbol not in self.contracts:# 不允许使用数字代码 lance
+            symbol = str(ib_contract.conId)# 不允许使用数字代码 lance
 
         return symbol
 
@@ -1104,9 +1150,12 @@ def generate_ib_contract(symbol: str, exchange: Exchange) -> Optional[Contract]:
             ib_contract.symbol = fields[0]
 
             if ib_contract.secType in ["FUT", "OPT", "FOP"]:
-                ib_contract.lastTradeDateOrContractMonth = fields[1]
+                # ib_contract.lastTradeDateOrContractMonth = fields[1]
+                if len(fields) > 3:
+                    ib_contract.lastTradeDateOrContractMonth = fields[1]
 
             if ib_contract.secType == "FUT":
+                # ib_contract.secType = "CONTFUT"
                 if len(fields) == 5:
                     ib_contract.multiplier = int(fields[2])
 
