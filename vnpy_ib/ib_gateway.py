@@ -294,7 +294,7 @@ class IbApi(EWrapper):
         self.accounts: dict[str, AccountData] = {}
         self.contracts: dict[str, ContractData] = {}
         # self.tradinghours: Dict[str, str] = {}
-        self.contracts_details: dict[str, dict] = {}
+        self.contracts_details: dict[str, ContractDetails] = {}
         self.contract_dict = {}
 
         self.subscribed: dict[str, SubscribeRequest] = {}
@@ -753,8 +753,8 @@ class IbApi(EWrapper):
             symbol: str = self.reqid_symbol_map[reqId]# 不允许使用数字代码 lance
         # 否则默认使用数字风格代码
         else:# 不允许使用数字代码 lance
-            symbol: str = str(ib_contract.conId)# 不允许使用数字代码 lance
-        # symbol: str = self.generate_symbol(ib_contract)# 不允许使用数字代码 lance
+            # symbol: str = str(ib_contract.conId)# 不允许使用数字代码 lance
+            symbol: str = self.generate_symbol(ib_contract)# 不允许使用数字代码 lance
 
         # 生成合约
         contract: ContractData = ContractData(
@@ -771,6 +771,11 @@ class IbApi(EWrapper):
             stop_supported=True,
             gateway_name=self.gateway_name,
         )
+
+        # 龙胜自己额外增加 trading hours, time zone， local symbol
+        # contract.tradingHours = contractDetails.tradingHours
+        # contract.liquidHours = contractDetails.liquidHours
+        contract.timeZoneId = contractDetails.timeZoneId
 
         if contract.product == Product.OPTION:
             underlying_symbol: str = str(contractDetails.underConId)
@@ -794,23 +799,24 @@ class IbApi(EWrapper):
         if self.query_options and ib_contract.secType in {"STK", "FUT", "IND"}:
             self.query_option_portfolio(ib_contract)
 
-        # self.tradinghours[contract.vt_symbol] = {'tradingHours': contractDetails.tradingHours,
-        #                                          'liquidHours': contractDetails.liquidHours,
-        #                                          'timezone': contractDetails.timeZoneId,
-        #                                          'mintick': contractDetails.minTick}
+        ContractMonth = contractDetails.contract.lastTradeDateOrContractMonth[:6]
 
-        if str(contractDetails.contract.lastTradeDateOrContractMonth) not in contract.vt_symbol:
-            contract_raw = contract.vt_symbol.split('-')
-            contract_raw[0] = contract_raw[0]+'-'+str(contractDetails.contract.lastTradeDateOrContractMonth)
-            contract_exct = '-'.join(contract_raw)
-            self.contracts_details[contract_exct] = contractDetails.__dict__
-            if str(contractDetails.contract.conId) not in contract.vt_symbol:# 不保存数字代码 lance
-                if contract.vt_symbol not in self.contract_dict:
-                    self.contract_dict[contract.vt_symbol] = [contract_exct]
-                elif contract_exct not in self.contract_dict[contract.vt_symbol]:
-                    self.contract_dict[contract.vt_symbol].append(contract_exct)
-        else:
-            self.contracts_details[contract.vt_symbol] = contractDetails.__dict__
+        change_flag = False
+        if ContractMonth not in contract.vt_symbol:# 有ContractMonth的（FUT、OPT）且contract不是exec的
+            vt_symbol_exec = self.generate_symbol(ib_contract, detail=True)
+            self.contracts_details[vt_symbol_exec] = contractDetails
+            change_flag = True
+            # if str(contractDetails.contract.conId) not in contract.vt_symbol:# 不保存数字代码 lance
+            if contract.vt_symbol not in self.contract_dict:
+                self.contract_dict[contract.vt_symbol] = [vt_symbol_exec]
+            elif vt_symbol_exec not in self.contract_dict[contract.vt_symbol]:
+                self.contract_dict[contract.vt_symbol].append(vt_symbol_exec)
+        else:# 进入这个分支：没有ContractMonth的（STK）、有ContractMonth但contract已经是exec的
+            self.contracts_details[contract.vt_symbol] = contractDetails
+            change_flag = True
+
+        if change_flag:
+            self.save_contract_data()
 
     def execDetails(self, reqId: int, contract: Contract, execution: Execution) -> None:
         """交易数据更新回报"""
@@ -946,8 +952,6 @@ class IbApi(EWrapper):
         """断开TWS连接"""
         if not self.status:
             return
-
-        self.save_contract_data()
 
         self.status = False
         self.client.disconnect()
@@ -1216,6 +1220,7 @@ class IbApi(EWrapper):
         """加载本地合约数据"""
         f = shelve.open(self.data_filepath)
         self.contracts = f.get("contracts", {})
+        self.contracts_details = f.get("contracts_details", {})
         f.close()
 
         for contract in self.contracts.values():
@@ -1234,15 +1239,17 @@ class IbApi(EWrapper):
 
         f = shelve.open(self.data_filepath)
         f["contracts"] = contracts
+        f["contracts_details"] = self.contracts_details
         f.close()
 
-    def generate_symbol(self, ib_contract: Contract) -> str:
+    def generate_symbol(self, ib_contract: Contract, detail: bool=False) -> str:
         """生成合约代码"""
         # 生成字符串风格代码
         fields: list = [ib_contract.symbol]
 
-        if ib_contract.secType in ["FUT", "OPT", "FOP"]:
-            fields.append(ib_contract.lastTradeDateOrContractMonth)
+        if ib_contract.secType in ["FUT", "OPT", "FOP", "CONTFUT"]:
+            ContractMonth = ib_contract.lastTradeDateOrContractMonth[:6]
+            fields.append(ContractMonth)
 
         if ib_contract.secType in ["OPT", "FOP"]:
             fields.append(ib_contract.right)
@@ -1257,8 +1264,11 @@ class IbApi(EWrapper):
         vt_symbol: str = f"{symbol}.{exchange.value}"
 
         # 在合约信息中找不到字符串风格代码，则使用数字代码
-        if vt_symbol not in self.contracts:# 不允许使用数字代码 lance
-            symbol = str(ib_contract.conId)# 不允许使用数字代码 lance
+        # if vt_symbol not in self.contracts:# 不允许使用数字代码 lance
+        #     symbol = str(ib_contract.conId)# 不允许使用数字代码 lance
+
+        if detail:
+            return vt_symbol
 
         return symbol
 
