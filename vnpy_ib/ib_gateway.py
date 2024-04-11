@@ -1011,7 +1011,7 @@ class IbApi(EWrapper):
         """查询历史数据"""
         contract: ContractData = self.contracts[req.vt_symbol]
         if not contract:
-            self.write_log(f"找不到合约：{req.vt_symbol}，请先订阅")
+            self.gateway.write_log(f"找不到合约：{req.vt_symbol}，请先订阅")
             return []
 
         self.history_req = req
