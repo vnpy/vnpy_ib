@@ -775,7 +775,7 @@ class IbApi(EWrapper):
         # 龙胜自己额外增加 trading hours, time zone， local symbol
         # contract.tradingHours = contractDetails.tradingHours
         # contract.liquidHours = contractDetails.liquidHours
-        contract.timeZoneId = contractDetails.timeZoneId
+        # contract.timeZoneId = contractDetails.timeZoneId
 
         if contract.product == Product.OPTION:
             underlying_symbol: str = str(contractDetails.underConId)
