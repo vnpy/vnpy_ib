@@ -198,8 +198,7 @@ class IbGateway(BaseGateway):
         "TWS地址": "127.0.0.1",
         "TWS端口": 7497,
         "客户号": 1,
-        "交易账户": "",
-        "查询期权": ["否", "是"]
+        "交易账户": ""
     }
 
     exchanges: list[str] = list(EXCHANGE_VT2IB.keys())
@@ -217,9 +216,8 @@ class IbGateway(BaseGateway):
         port: int = setting["TWS端口"]
         clientid: int = setting["客户号"]
         account: str = setting["交易账户"]
-        query_options: bool = setting["查询期权"] == "是"
 
-        self.api.connect(host, port, clientid, account, query_options)
+        self.api.connect(host, port, clientid, account)
 
         self.event_engine.register(EVENT_TIMER, self.process_timer_event)
 
@@ -281,7 +279,6 @@ class IbApi(EWrapper):
         self.clientid: int = 0
         self.history_reqid: int = 0
         self.account: str = ""
-        self.query_options: bool = False
 
         self.ticks: dict[int, TickData] = {}
         self.orders: dict[str, OrderData] = {}
@@ -694,10 +691,6 @@ class IbApi(EWrapper):
 
             self.contracts[contract.vt_symbol] = contract
 
-        # 查询期权
-        if self.query_options and ib_contract.secType in {"STK", "FUT", "IND"}:
-            self.query_option_portfolio(ib_contract)
-
     def execDetails(self, reqId: int, contract: Contract, execution: Execution) -> None:
         """交易数据更新回报"""
         super().execDetails(reqId, contract, execution)
@@ -805,8 +798,7 @@ class IbApi(EWrapper):
         host: str,
         port: int,
         clientid: int,
-        account: str,
-        query_options: bool
+        account: str
     ) -> None:
         """连接TWS"""
         if self.status:
@@ -816,7 +808,6 @@ class IbApi(EWrapper):
         self.port = port
         self.clientid = clientid
         self.account = account
-        self.query_options = query_options
 
         self.client.connect(host, port, clientid)
         self.thread = Thread(target=self.client.run)
