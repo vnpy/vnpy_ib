@@ -1091,6 +1091,23 @@ class IbApi(EWrapper):
 
         self.ticks[self.reqid] = tick
 
+    def unsubscribe(self, req: SubscribeRequest) -> None:
+        """退订tick数据更新"""
+        # 移除订阅记录
+        if req.vt_symbol not in self.subscribed:
+            return
+        self.subscribed.pop(req.vt_symbol)
+
+        # 获取订阅号
+        cancel_id: int = 0
+        for reqid, tick in self.ticks.items():
+            if tick.vt_symbol == req.vt_symbol:
+                cancel_id = reqid
+                break
+
+        # 发送退订请求
+        self.client.cancelMktData(cancel_id)
+
 
 def generate_ib_contract(symbol: str, exchange: Exchange) -> Optional[Contract]:
     """生产IB合约"""
