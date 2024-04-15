@@ -296,6 +296,8 @@ class IbApi(EWrapper):
 
         self.client: EClient = EClient(self)
 
+        self.ib_contracts: dict[str, Contract] = {}
+
     def connectAck(self) -> None:
         """连接成功回报"""
         self.status = True
@@ -683,13 +685,11 @@ class IbApi(EWrapper):
             contract.option_expiry = datetime.strptime(ib_contract.lastTradeDateOrContractMonth, "%Y%m%d")
             contract.option_underlying = underlying_symbol + "_" + ib_contract.lastTradeDateOrContractMonth
 
-            # 查询期权行情切片
-            self.query_tick(ib_contract, contract.symbol, contract.exchange)
-
         if contract.vt_symbol not in self.contracts:
             self.gateway.on_contract(contract)
 
             self.contracts[contract.vt_symbol] = contract
+            self.ib_contracts[contract.vt_symbol] = ib_contract
 
     def execDetails(self, reqId: int, contract: Contract, execution: Execution) -> None:
         """交易数据更新回报"""
@@ -1015,6 +1015,7 @@ class IbApi(EWrapper):
         """加载本地合约数据"""
         f = shelve.open(self.data_filepath)
         self.contracts = f.get("contracts", {})
+        self.ib_contracts = f.get("ib_contracts", {})
         f.close()
 
         for contract in self.contracts.values():
@@ -1033,6 +1034,7 @@ class IbApi(EWrapper):
 
         f = shelve.open(self.data_filepath)
         f["contracts"] = contracts
+        f["ib_contracts"] = self.ib_contracts
         f.close()
 
     def generate_symbol(self, ib_contract: Contract) -> str:
@@ -1061,17 +1063,27 @@ class IbApi(EWrapper):
 
         return symbol
 
-    def query_tick(self, ib_contract: Contract, symbol: str, exchange: Exchange) -> None:
+    def query_tick(self, vt_symbol: str) -> None:
         """查询行情切片"""
         if not self.status:
+            return
+
+        contract: ContractData = self.contracts.get(vt_symbol, None)
+        if not contract:
+            self.gateway.write_log(f"查询行情切片失败，找不到{vt_symbol}对应的合约数据")
+            return
+
+        ib_contract: Contract = self.ib_contracts.get(vt_symbol, None)
+        if not contract:
+            self.gateway.write_log(f"查询行情切片失败，找不到{vt_symbol}对应的IB合约数据")
             return
 
         self.reqid += 1
         self.client.reqMktData(self.reqid, ib_contract, "", True, False, [])
 
         tick: TickData = TickData(
-            symbol=symbol,
-            exchange=exchange,
+            symbol=contract.symbol,
+            exchange=contract.exchange,
             datetime=datetime.now(LOCAL_TZ),
             gateway_name=self.gateway_name
         )
