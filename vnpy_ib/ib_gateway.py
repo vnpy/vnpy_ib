@@ -1049,7 +1049,7 @@ class IbApi(EWrapper):
                     self.gateway.write_log(f"订阅行情{req.symbol}失败，不支持的交易所{req.exchange}")
                     continue
 
-                if " " in req.symbol:
+                if " " in req.symbol and "-" not in req.symbol:
                     self.gateway.write_log("订阅失败，合约代码中包含空格")
                     return
 
@@ -1108,7 +1108,7 @@ class IbApi(EWrapper):
             self.gateway.write_log(f"不支持的价格类型：{req.type}")
             return ""
 
-        if " " in req.symbol:
+        if " " in req.symbol and "-" not in req.symbol:
             self.gateway.write_log("委托失败，合约代码中包含空格")
             return ""
 
