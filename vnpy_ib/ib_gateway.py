@@ -913,14 +913,7 @@ class IbApi(EWrapper):
         self.history_condition.notify()
         self.history_condition.release()
 
-    def connect(self, host: str, port: int, clientid: int, account: str, query_options: bool) -> None:
-    def connect(
-        self,
-        host: str,
-        port: int,
-        clientid: int,
-        account: str
-    ) -> None:
+    def connect(self, host: str, port: int, clientid: int, account: str) -> None:
         """连接TWS"""
         if self.status:
             return
@@ -951,6 +944,8 @@ class IbApi(EWrapper):
         """断开TWS连接"""
         if not self.status:
             return
+
+        self.save_contract_data()
 
         self.status = False
         self.client.disconnect()
@@ -1219,6 +1214,7 @@ class IbApi(EWrapper):
         """加载本地合约数据"""
         f = shelve.open(self.data_filepath)
         self.contracts = f.get("contracts", {})
+        self.ib_contracts = f.get("ib_contracts", {})
         self.contracts_details = f.get("contracts_details", {})
         f.close()
 
@@ -1238,6 +1234,7 @@ class IbApi(EWrapper):
 
         f = shelve.open(self.data_filepath)
         f["contracts"] = contracts
+        f["ib_contracts"] = self.ib_contracts
         f["contracts_details"] = self.contracts_details
         f.close()
 
