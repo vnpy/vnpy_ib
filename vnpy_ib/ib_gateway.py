@@ -1013,8 +1013,8 @@ class IbApi(EWrapper):
         #  订阅tick数据并创建tick对象缓冲区
         self.reqid += 1
         # self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])# lance
-        self.client.reqMktData(self.reqid, ib_contract, "101", False, False, [])# lance
-        # self.client.reqMktData(self.reqid, ib_contract, "101", True, False, [])# lance 取主力合约无需保持订阅
+        self.client.reqMktData(self.reqid, ib_contract, "588", False, False, [])# lance
+        # self.client.reqMktData(self.reqid, ib_contract, "588", True, False, [])# lance 取主力合约无需保持订阅
 
         tick: TickData = TickData(
             symbol=req.symbol,
@@ -1070,8 +1070,8 @@ class IbApi(EWrapper):
                 self.reqid += 1
                 self.gateway.write_log(f"api订阅前reqid：{self.reqid},symbol:{req.symbol}")
                 # self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])# lance
-                self.client.reqMktData(self.reqid, ib_contract, "101", False, False, [])# lance
-                # self.client.reqMktData(self.reqid, ib_contract, "101", True, False, [])# lance 取主力合约无需保持订阅
+                self.client.reqMktData(self.reqid, ib_contract, "588", False, False, [])# lance
+                # self.client.reqMktData(self.reqid, ib_contract, "588", True, False, [])# lance 取主力合约无需保持订阅
 
                 tick: TickData = TickData(
                     symbol=req.symbol,
