@@ -204,8 +204,7 @@ class IbGateway(BaseGateway):
         "TWS地址": "localhost",
         "TWS端口": 7497,
         "客户号": 1,
-        "交易账户": "",
-        "查询期权": ["否", "是"]
+        "交易账户": ""
     }
 
     exchanges: list[str] = list(EXCHANGE_VT2IB.keys())
@@ -223,9 +222,8 @@ class IbGateway(BaseGateway):
         port: int = setting["TWS端口"]
         clientid: int = setting["客户号"]
         account: str = setting["交易账户"]
-        query_options: bool = setting["查询期权"] == "是"
 
-        self.api.connect(host, port, clientid, account, query_options)
+        self.api.connect(host, port, clientid, account)
 
         self.event_engine.register(EVENT_TIMER, self.process_timer_event)
 
@@ -287,7 +285,6 @@ class IbApi(EWrapper):
         self.clientid: int = 0
         self.history_reqid: int = 0
         self.account: str = ""
-        self.query_options: bool = False
 
         self.ticks: dict[int, TickData] = {}
         self.orders: dict[str, OrderData] = {}
@@ -309,6 +306,8 @@ class IbApi(EWrapper):
         self.reqid_symbol_map: dict[int, str] = {}
 
         self.client: EClient = EClient(self)
+
+        self.ib_contracts: dict[str, Contract] = {}
 
     def connectAck(self) -> None:
         """连接成功回报"""
@@ -787,17 +786,11 @@ class IbApi(EWrapper):
             contract.option_expiry = datetime.strptime(ib_contract.lastTradeDateOrContractMonth, "%Y%m%d")
             contract.option_underlying = underlying_symbol + "_" + ib_contract.lastTradeDateOrContractMonth
 
-            # 查询期权行情切片
-            self.query_tick(ib_contract, contract.symbol, contract.exchange)
-
         if contract.vt_symbol not in self.contracts:
             self.gateway.on_contract(contract)
 
             self.contracts[contract.vt_symbol] = contract
-
-        # 查询期权
-        if self.query_options and ib_contract.secType in {"STK", "FUT", "IND"}:
-            self.query_option_portfolio(ib_contract)
+            self.ib_contracts[contract.vt_symbol] = ib_contract
 
         ContractMonth = contractDetails.contract.lastTradeDateOrContractMonth[:6]
 
@@ -921,6 +914,13 @@ class IbApi(EWrapper):
         self.history_condition.release()
 
     def connect(self, host: str, port: int, clientid: int, account: str, query_options: bool) -> None:
+    def connect(
+        self,
+        host: str,
+        port: int,
+        clientid: int,
+        account: str
+    ) -> None:
         """连接TWS"""
         if self.status:
             return
@@ -929,7 +929,6 @@ class IbApi(EWrapper):
         self.port = port
         self.clientid = clientid
         self.account = account
-        self.query_options = query_options
 
         self.client.connect(host, port, clientid)
         self.thread = Thread(target=self.client.run)
@@ -1272,23 +1271,50 @@ class IbApi(EWrapper):
 
         return symbol
 
-    def query_tick(self, ib_contract: Contract, symbol: str, exchange: Exchange) -> None:
+    def query_tick(self, vt_symbol: str) -> None:
         """查询行情切片"""
         if not self.status:
+            return
+
+        contract: ContractData = self.contracts.get(vt_symbol, None)
+        if not contract:
+            self.gateway.write_log(f"查询行情切片失败，找不到{vt_symbol}对应的合约数据")
+            return
+
+        ib_contract: Contract = self.ib_contracts.get(vt_symbol, None)
+        if not contract:
+            self.gateway.write_log(f"查询行情切片失败，找不到{vt_symbol}对应的IB合约数据")
             return
 
         self.reqid += 1
         self.client.reqMktData(self.reqid, ib_contract, "", True, False, [])
 
         tick: TickData = TickData(
-            symbol=symbol,
-            exchange=exchange,
+            symbol=contract.symbol,
+            exchange=contract.exchange,
             datetime=datetime.now(LOCAL_TZ),
             gateway_name=self.gateway_name
         )
         tick.extra = {}
 
         self.ticks[self.reqid] = tick
+
+    def unsubscribe(self, req: SubscribeRequest) -> None:
+        """退订tick数据更新"""
+        # 移除订阅记录
+        if req.vt_symbol not in self.subscribed:
+            return
+        self.subscribed.pop(req.vt_symbol)
+
+        # 获取订阅号
+        cancel_id: int = 0
+        for reqid, tick in self.ticks.items():
+            if tick.vt_symbol == req.vt_symbol:
+                cancel_id = reqid
+                break
+
+        # 发送退订请求
+        self.client.cancelMktData(cancel_id)
 
 
 def generate_ib_contract(symbol: str, exchange: Exchange) -> Optional[Contract]:

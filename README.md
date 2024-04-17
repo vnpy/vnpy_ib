@@ -5,9 +5,9 @@
 </p>
 
 <p align="center">
-    <img src ="https://img.shields.io/badge/version-10.19.1.4-blueviolet.svg"/>
+    <img src ="https://img.shields.io/badge/version-10.19.1.5-blueviolet.svg"/>
     <img src ="https://img.shields.io/badge/platform-windows|linux|macos-yellow.svg"/>
-    <img src ="https://img.shields.io/badge/python-3.8|3.9|3.10-blue.svg" />
+    <img src ="https://img.shields.io/badge/python-3.10|3.11|3.12-blue.svg" />
     <img src ="https://img.shields.io/github/license/vnpy/vnpy.svg?color=orange"/>
 </p>
 
