@@ -120,6 +120,12 @@ EXCHANGE_VT2IB: dict[Exchange, str] = {
     Exchange.NYBOT: "NYBOT",
     Exchange.IPE: "IPE",
     Exchange.TWSE: "TWSE",
+    Exchange.OSEJPN: "OSE.JPN",
+    Exchange.NSE: "NSE",
+    Exchange.MEFFRV: "MEFFRV",
+    Exchange.MONEP: "MONEP",
+    Exchange.IDEM: "IDEM",
+    Exchange.KSE: "KSE",
 }
 EXCHANGE_IB2VT: dict[str, Exchange] = {v: k for k, v in EXCHANGE_VT2IB.items()}
 
@@ -433,6 +439,7 @@ class IbApi(EWrapper):
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
             self.gateway.write_log(f"tickPrice函数收到未订阅的推送，reqId：{reqId}")
+            self.client.cancelMktData(reqId)
             return
 
         name: str = TICKFIELD_IB2VT[tickType]
@@ -477,6 +484,7 @@ class IbApi(EWrapper):
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
             self.gateway.write_log(f"tickSize函数收到未订阅的推送，reqId：{reqId}")
+            self.client.cancelMktData(reqId)
             return
 
         name: str = TICKFIELD_IB2VT[tickType]
@@ -503,6 +511,7 @@ class IbApi(EWrapper):
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
             self.gateway.write_log(f"tickString函数收到未订阅的推送，reqId：{reqId}")
+            self.client.cancelMktData(reqId)
             return
 
         dt: datetime = datetime.fromtimestamp(int(value))
@@ -542,6 +551,7 @@ class IbApi(EWrapper):
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
             self.gateway.write_log(f"tickOptionComputation函数收到未订阅的推送，reqId：{reqId}")
+            self.client.cancelMktData(reqId)
             return
 
         prefix: str = TICKFIELD_IB2VT[tickType]
@@ -570,6 +580,7 @@ class IbApi(EWrapper):
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
             self.gateway.write_log(f"tickSnapshotEnd函数收到未订阅的推送，reqId：{reqId}")
+            self.client.cancelMktData(reqId)
             return
 
         self.gateway.write_log(f"{tick.vt_symbol}行情切片查询成功")
