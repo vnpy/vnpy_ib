@@ -666,7 +666,7 @@ class IbApi(EWrapper):
             exchange=EXCHANGE_IB2VT[ib_contract.exchange],
             name=contractDetails.longName,
             product=PRODUCT_IB2VT[ib_contract.secType],
-            size=int(ib_contract.multiplier),
+            size=float(ib_contract.multiplier),
             pricetick=contractDetails.minTick,
             min_volume=contractDetails.minSize,
             net_position=True,
