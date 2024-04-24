@@ -301,6 +301,7 @@ class IbApi(EWrapper):
         self.contract_dict = {}
 
         self.subscribed: dict[str, SubscribeRequest] = {}
+        self.cancelMktData_reqid: list[int] = []
         self.data_ready: bool = False
         self.order_ready: bool = False
         self.subscribeRequest_queue = Queue()
@@ -438,8 +439,9 @@ class IbApi(EWrapper):
 
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
-            self.gateway.write_log(f"tickPrice函数收到未订阅的推送，reqId：{reqId}")
-            self.client.cancelMktData(reqId)
+            if reqId not in self.cancelMktData_reqid:
+                self.client.cancelMktData(reqId)
+                self.cancelMktData_reqid.append(reqId)
             return
 
         name: str = TICKFIELD_IB2VT[tickType]
@@ -483,8 +485,9 @@ class IbApi(EWrapper):
 
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
-            self.gateway.write_log(f"tickSize函数收到未订阅的推送，reqId：{reqId}")
-            self.client.cancelMktData(reqId)
+            if reqId not in self.cancelMktData_reqid:
+                self.client.cancelMktData(reqId)
+                self.cancelMktData_reqid.append(reqId)
             return
 
         name: str = TICKFIELD_IB2VT[tickType]
@@ -510,8 +513,9 @@ class IbApi(EWrapper):
 
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
-            self.gateway.write_log(f"tickString函数收到未订阅的推送，reqId：{reqId}")
-            self.client.cancelMktData(reqId)
+            if reqId not in self.cancelMktData_reqid:
+                self.client.cancelMktData(reqId)
+                self.cancelMktData_reqid.append(reqId)
             return
 
         dt: datetime = datetime.fromtimestamp(int(value))
@@ -550,8 +554,9 @@ class IbApi(EWrapper):
 
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
-            self.gateway.write_log(f"tickOptionComputation函数收到未订阅的推送，reqId：{reqId}")
-            self.client.cancelMktData(reqId)
+            if reqId not in self.cancelMktData_reqid:
+                self.client.cancelMktData(reqId)
+                self.cancelMktData_reqid.append(reqId)
             return
 
         prefix: str = TICKFIELD_IB2VT[tickType]
@@ -579,8 +584,9 @@ class IbApi(EWrapper):
 
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
-            self.gateway.write_log(f"tickSnapshotEnd函数收到未订阅的推送，reqId：{reqId}")
-            self.client.cancelMktData(reqId)
+            if reqId not in self.cancelMktData_reqid:
+                self.client.cancelMktData(reqId)
+                self.cancelMktData_reqid.append(reqId)
             return
 
         self.gateway.write_log(f"{tick.vt_symbol}行情切片查询成功")
