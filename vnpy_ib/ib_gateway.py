@@ -98,8 +98,10 @@ EXCHANGE_VT2IB: dict[Exchange, str] = {
     Exchange.CBOE: "CBOE",
     Exchange.ICE: "ICE",
     Exchange.SEHK: "SEHK",
-    Exchange.SSE: "SEHKNTL",
-    Exchange.SZSE: "SEHKSZSE",
+    # Exchange.SSE: "SEHKNTL",
+    Exchange.SEHKNTL: "SEHKNTL",
+    # Exchange.SZSE: "SEHKSZSE",
+    Exchange.SEHKSZSE: "SEHKSZSE",
     Exchange.HKFE: "HKFE",
     Exchange.CFE: "CFE",
     Exchange.TSE: "TSE",
@@ -120,12 +122,15 @@ EXCHANGE_VT2IB: dict[Exchange, str] = {
     Exchange.NYBOT: "NYBOT",
     Exchange.IPE: "IPE",
     Exchange.TWSE: "TWSE",
+    # OSE.JPN
     Exchange.OSEJPN: "OSE.JPN",
     Exchange.NSE: "NSE",
     Exchange.MEFFRV: "MEFFRV",
     Exchange.MONEP: "MONEP",
     Exchange.IDEM: "IDEM",
     Exchange.KSE: "KSE",
+    Exchange.SEHKSTAR: "SEHKSTAR",
+    Exchange.MOEX: "MOEX",
 }
 EXCHANGE_IB2VT: dict[str, Exchange] = {v: k for k, v in EXCHANGE_VT2IB.items()}
 
