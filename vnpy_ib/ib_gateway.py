@@ -131,6 +131,8 @@ EXCHANGE_VT2IB: dict[Exchange, str] = {
     Exchange.KSE: "KSE",
     Exchange.SEHKSTAR: "SEHKSTAR",
     Exchange.MOEX: "MOEX",
+    Exchange.OMS: "OMS",
+    Exchange.ICEEU: "ICEEU",
 }
 EXCHANGE_IB2VT: dict[str, Exchange] = {v: k for k, v in EXCHANGE_VT2IB.items()}
 
@@ -770,12 +772,12 @@ class IbApi(EWrapper):
             ib_contract.multiplier = 1
 
         # 字符串风格的代码，需要从缓存中获取
-        if reqId in self.reqid_symbol_map:# 不允许使用数字代码 lance
-            symbol: str = self.reqid_symbol_map[reqId]# 不允许使用数字代码 lance
+        if reqId in self.reqid_symbol_map:
+            symbol: str = self.reqid_symbol_map[reqId]
         # 否则默认使用数字风格代码
-        else:# 不允许使用数字代码 lance
-            # symbol: str = str(ib_contract.conId)# 不允许使用数字代码 lance
-            symbol: str = self.generate_symbol(ib_contract)# 不允许使用数字代码 lance
+        else:
+            symbol: str = str(ib_contract.conId)# 不允许使用数字代码 lance
+            # symbol: str = self.generate_symbol(ib_contract)
 
         # 生成合约
         contract: ContractData = ContractData(
@@ -814,21 +816,32 @@ class IbApi(EWrapper):
             self.contracts[contract.vt_symbol] = contract
             self.ib_contracts[contract.vt_symbol] = ib_contract
 
-        ContractMonth = contractDetails.contract.lastTradeDateOrContractMonth[:6]
+        # lastTradeDate = contractDetails.contract.lastTradeDateOrContractMonth[:8]
 
         change_flag = False
-        if ContractMonth not in contract.vt_symbol:# 有ContractMonth的（FUT、OPT）且contract不是exec的
-            vt_symbol_exec = self.generate_symbol(ib_contract, detail=True)
-            self.contracts_details[vt_symbol_exec] = contractDetails
-            change_flag = True
-            # if str(contractDetails.contract.conId) not in contract.vt_symbol:# 不保存数字代码 lance
-            if contract.vt_symbol not in self.contract_dict:
-                self.contract_dict[contract.vt_symbol] = [vt_symbol_exec]
-            elif vt_symbol_exec not in self.contract_dict[contract.vt_symbol]:
-                self.contract_dict[contract.vt_symbol].append(vt_symbol_exec)
-        else:# 进入这个分支：没有ContractMonth的（STK）、有ContractMonth但contract已经是exec的
+        if symbol.isdigit() and contract.vt_symbol not in self.contracts_details:
+            if contractDetails.contract.secType == "CONTFUT":
+                contractDetails.contract.secType = "FUT"
             self.contracts_details[contract.vt_symbol] = contractDetails
+            vt_symbol = self.generate_symbol(ib_contract, detail=True)
+            if contract.vt_symbol not in self.contract_dict:
+                self.contract_dict[vt_symbol] = [f'{symbol}.{contract.exchange.value}']
+            elif symbol not in self.contract_dict[contract.vt_symbol]:
+                self.contract_dict[vt_symbol].append(f'{symbol}.{contract.exchange.value}')
             change_flag = True
+        # else:
+        #     if lastTradeDate not in contract.vt_symbol:# 有ContractMonth的（FUT、OPT）且contract不是exec的
+        #         vt_symbol_exec = self.generate_symbol(ib_contract, detail=True)
+        #         self.contracts_details[vt_symbol_exec] = contractDetails
+        #         change_flag = True
+        #         # if str(contractDetails.contract.conId) not in contract.vt_symbol:# 不保存数字代码 lance
+        #         if contract.vt_symbol not in self.contract_dict:
+        #             self.contract_dict[contract.vt_symbol] = [vt_symbol_exec]
+        #         elif vt_symbol_exec not in self.contract_dict[contract.vt_symbol]:
+        #             self.contract_dict[contract.vt_symbol].append(vt_symbol_exec)
+        #     else:# 进入这个分支：没有ContractMonth的（STK）、有ContractMonth但contract已经是exec的
+        #         self.contracts_details[contract.vt_symbol] = contractDetails
+        #         change_flag = True
 
         if change_flag:
             self.save_contract_data()
@@ -1085,8 +1098,8 @@ class IbApi(EWrapper):
                 self.client.reqContractDetails(self.reqid, ib_contract)
 
                 # 如果使用了字符串风格的代码，则需要缓存
-                if "-" in req.symbol:
-                    self.reqid_symbol_map[self.reqid] = req.symbol
+                # if "-" in req.symbol:# 只使用数字代码 lance
+                #     self.reqid_symbol_map[self.reqid] = req.symbol
 
                 #  订阅tick数据并创建tick对象缓冲区
                 self.reqid += 1
@@ -1266,8 +1279,9 @@ class IbApi(EWrapper):
         fields: list = [ib_contract.symbol]
 
         if ib_contract.secType in ["FUT", "OPT", "FOP", "CONTFUT"]:
-            ContractMonth = ib_contract.lastTradeDateOrContractMonth[:6]
-            fields.append(ContractMonth)
+            # lastTradeDate = ib_contract.lastTradeDateOrContractMonth[:8]
+            # fields.append(lastTradeDate)
+            fields.append(ib_contract.lastTradeDateOrContractMonth)
 
         if ib_contract.secType in ["OPT", "FOP"]:
             fields.append(ib_contract.right)
@@ -1281,12 +1295,16 @@ class IbApi(EWrapper):
         exchange: Exchange = EXCHANGE_IB2VT.get(ib_contract.exchange, Exchange.SMART)
         vt_symbol: str = f"{symbol}.{exchange.value}"
 
-        # 在合约信息中找不到字符串风格代码，则使用数字代码
-        # if vt_symbol not in self.contracts:# 不允许使用数字代码 lance
-        #     symbol = str(ib_contract.conId)# 不允许使用数字代码 lance
-
         if detail:
+            # return vt_symbol
+            fields.pop(1)# 删除fields中的lastTradeDate
+            symbol = JOIN_SYMBOL.join(fields)
+            vt_symbol = f"{symbol}.{exchange.value}"
             return vt_symbol
+
+        # 在合约信息中找不到字符串风格代码，则使用数字代码
+        if vt_symbol not in self.contracts:# 不允许使用数字代码 lance
+            symbol = str(ib_contract.conId)# 不允许使用数字代码 lance
 
         return symbol
 
