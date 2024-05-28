@@ -1180,8 +1180,8 @@ class IbApi(EWrapper):
         if not self.status:
             return
         if not self.order_ready:
-            self.gateway.write_log(f"API还没有完全初始化完毕,还没有收到nextValidID,暂不能撤单。oderid:{req.orderid},symbol:{req.vt_symbol},direction:{req.direction},price:{req.price},volume:{req.volume}")
-            return ""
+            self.gateway.write_log(f"API还没有完全初始化完毕,还没有收到nextValidID,暂不能撤单。oderid:{req.orderid},symbol:{req.vt_symbol}")
+            return
 
         # IB API 10.9.1在撤单时，新增1个参数，撤单时间
         manualCancelOrderTime:str = datetime.now(LOCAL_TZ).strftime("%Y%m%d-%H:%M:%S")
