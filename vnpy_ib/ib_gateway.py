@@ -308,7 +308,7 @@ class IbApi(EWrapper):
         self.contract_dict = {}
 
         self.subscribed: dict[str, SubscribeRequest] = {}
-        self.cancelMktData_reqid: list[int] = []
+        # self.cancelMktData_reqid: list[int] = []
         self.data_ready: bool = False
         self.order_ready: bool = False
         # self.subscribeRequest_queue = Queue()
@@ -445,9 +445,9 @@ class IbApi(EWrapper):
 
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
-            if reqId not in self.cancelMktData_reqid:
-                self.client.cancelMktData(reqId)
-                self.cancelMktData_reqid.append(reqId)
+            # if reqId not in self.cancelMktData_reqid:
+            #     self.client.cancelMktData(reqId)
+            #     self.cancelMktData_reqid.append(reqId)
             return
 
         name: str = TICKFIELD_IB2VT[tickType]
@@ -490,9 +490,9 @@ class IbApi(EWrapper):
 
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
-            if reqId not in self.cancelMktData_reqid:
-                self.client.cancelMktData(reqId)
-                self.cancelMktData_reqid.append(reqId)
+            # if reqId not in self.cancelMktData_reqid:
+            #     self.client.cancelMktData(reqId)
+            #     self.cancelMktData_reqid.append(reqId)
             return
 
         name: str = TICKFIELD_IB2VT[tickType]
@@ -518,9 +518,9 @@ class IbApi(EWrapper):
 
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
-            if reqId not in self.cancelMktData_reqid:
-                self.client.cancelMktData(reqId)
-                self.cancelMktData_reqid.append(reqId)
+            # if reqId not in self.cancelMktData_reqid:
+            #     self.client.cancelMktData(reqId)
+            #     self.cancelMktData_reqid.append(reqId)
             return
 
         dt: datetime = datetime.fromtimestamp(int(value))
@@ -559,9 +559,9 @@ class IbApi(EWrapper):
 
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
-            if reqId not in self.cancelMktData_reqid:
-                self.client.cancelMktData(reqId)
-                self.cancelMktData_reqid.append(reqId)
+            # if reqId not in self.cancelMktData_reqid:
+            #     self.client.cancelMktData(reqId)
+            #     self.cancelMktData_reqid.append(reqId)
             return
 
         prefix: str = TICKFIELD_IB2VT[tickType]
@@ -589,9 +589,9 @@ class IbApi(EWrapper):
 
         tick: TickData = self.ticks.get(reqId, None)
         if not tick:
-            if reqId not in self.cancelMktData_reqid:
-                self.client.cancelMktData(reqId)
-                self.cancelMktData_reqid.append(reqId)
+            # if reqId not in self.cancelMktData_reqid:
+            #     self.client.cancelMktData(reqId)
+            #     self.cancelMktData_reqid.append(reqId)
             return
 
         self.gateway.write_log(f"{tick.vt_symbol}行情切片查询成功")
