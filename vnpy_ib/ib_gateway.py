@@ -720,12 +720,15 @@ class IbApi(EWrapper):
             accountName,
         )
 
-        if contract.exchange:
-            exchange: Exchange = EXCHANGE_IB2VT.get(contract.exchange, None)
-        elif contract.primaryExchange:
-            exchange: Exchange = EXCHANGE_IB2VT.get(contract.primaryExchange, None)
+        if contract.secType == "STK":# todo: 且属于美股交易所列表
+            exchange = Exchange.SMART
         else:
-            exchange: Exchange = Exchange.SMART   # Use smart routing for default
+            if contract.exchange:
+                exchange: Exchange = EXCHANGE_IB2VT.get(contract.exchange, None)
+            elif contract.primaryExchange:
+                exchange: Exchange = EXCHANGE_IB2VT.get(contract.primaryExchange, None)
+            else:
+                exchange: Exchange = Exchange.SMART   # Use smart routing for default
 
         if not exchange:
             msg: str = f"存在不支持的交易所持仓：{self.generate_symbol(contract)} {contract.exchange} {contract.primaryExchange}"
@@ -733,9 +736,9 @@ class IbApi(EWrapper):
             return
 
         try:
-            ib_size: int = int(contract.multiplier)
+            ib_size: float = float(contract.multiplier)
         except ValueError:
-            ib_size = 1
+            ib_size = 1.
         price = averageCost / ib_size
 
         pos: PositionData = PositionData(
@@ -767,7 +770,7 @@ class IbApi(EWrapper):
 
         # 处理合约乘数为0的情况
         if not ib_contract.multiplier:
-            ib_contract.multiplier = 1
+            ib_contract.multiplier = 1.
 
         # 字符串风格的代码，需要从缓存中获取
         if reqId in self.reqid_symbol_map:
