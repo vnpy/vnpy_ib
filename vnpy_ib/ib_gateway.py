@@ -720,7 +720,10 @@ class IbApi(EWrapper):
             accountName,
         )
 
-        if contract.secType == "STK":# todo: 且属于美股交易所列表
+        # 美股股票持仓，需要转换交易所
+        if (contract.secType == "STK" and
+                (contract.exchange in ('NYSE', 'NASDAQ', 'AMEX', 'ARCA', 'ISLAND', 'BATS', 'IEX', 'EDGEA') or
+                 contract.exchange not in EXCHANGE_IB2VT)):
             exchange = Exchange.SMART
         else:
             if contract.exchange:
