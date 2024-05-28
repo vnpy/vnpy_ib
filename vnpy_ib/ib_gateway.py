@@ -311,7 +311,7 @@ class IbApi(EWrapper):
         self.cancelMktData_reqid: list[int] = []
         self.data_ready: bool = False
         self.order_ready: bool = False
-        self.subscribeRequest_queue = Queue()
+        # self.subscribeRequest_queue = Queue()
 
         self.history_req: HistoryRequest = None
         self.history_condition: Condition = Condition()
@@ -362,15 +362,15 @@ class IbApi(EWrapper):
         if not self.data_ready:
             self.data_ready = True
 
-        # 断线后重连，需要把订阅过的合约重新订阅
-        reqs: list = list(self.subscribed.values())
-        self.subscribed.clear()
-        for req in reqs:
-            self.subscribe(req)
-
-        # 启动负责订阅行情的线程，只在初始化成功后启动，该线程断线后会退出(self.status = False)
-        self.subscribeRequest_thread = Thread(target=self.subscribeRunner)
-        self.subscribeRequest_thread.start()
+        # # 断线后重连，需要把订阅过的合约重新订阅
+        # reqs: list = list(self.subscribed.values())
+        # self.subscribed.clear()
+        # for req in reqs:
+        #     self.subscribe(req)
+        #
+        # # 启动负责订阅行情的线程，只在初始化成功后启动，该线程断线后会退出(self.status = False)
+        # self.subscribeRequest_thread = Thread(target=self.subscribeRunner)
+        # self.subscribeRequest_thread.start()
 
     def currentTime(self, time: int) -> None:
         """IB当前服务器时间回报"""
@@ -420,7 +420,7 @@ class IbApi(EWrapper):
             self.order_ready = True
             self.data_ready = True
 
-        '''
+
         # 行情服务器已连接
         if errorCode == 2104 and not self.data_ready:
             self.data_ready = True
@@ -431,7 +431,6 @@ class IbApi(EWrapper):
             self.subscribed.clear()
             for req in reqs:
                 self.subscribe(req)
-        '''
 
     def tickPrice(self, reqId: TickerId, tickType: TickType, price: float, attrib: TickAttrib) -> None:
         """tick价格更新回报"""
@@ -479,7 +478,6 @@ class IbApi(EWrapper):
         # self.gateway.on_tick(copy(tick))
 
     def tickSize(self, reqId: TickerId, tickType: TickType, size: Decimal) -> None:
-
         """tick数量更新回报"""
         super().tickSize(reqId, tickType, size)
 
@@ -1006,17 +1004,17 @@ class IbApi(EWrapper):
         self.client.reqContractDetails(self.reqid, ib_contract)
 
     def subscribe(self, req: SubscribeRequest) -> None:
-        """把待请阅的合约放入队列，后面由专门负责订阅行情的线程来处理订阅"""
-        self.subscribeRequest_queue.put(req)
-
-    '''
-    def subscribe(self, req: SubscribeRequest) -> None:
+        # """把待请阅的合约放入队列，后面由专门负责订阅行情的线程来处理订阅"""
+        # self.subscribeRequest_queue.put(req)
         """订阅tick数据更新"""
         if not self.status:
             return
 
+        if not self.data_ready:
+            return
+
         if req.exchange not in EXCHANGE_VT2IB:
-            self.gateway.write_log(f"不支持的交易所{req.exchange}")
+            self.gateway.write_log(f"订阅行情{req.symbol}失败，不支持的交易所{req.exchange}")
             return
 
         if " " in req.symbol:
@@ -1031,11 +1029,8 @@ class IbApi(EWrapper):
         # 解析IB合约详情
         ib_contract: Contract = generate_ib_contract(req.symbol, req.exchange)
         if not ib_contract:
-            self.gateway.write_log("代码解析失败，请检查格式是否正确")
+            self.gateway.write_log("订阅行情{req.symbol}失败。代码解析失败，请检查格式是否正确")
             return
-
-        # #TODO 这边暂时强制修改sectype
-        # ib_contract.secType = "FUT+CONTFUT" # CONTFUT：连续合约；FUT：期货合约
 
         # 通过TWS查询合约信息
         self.reqid += 1
@@ -1047,6 +1042,7 @@ class IbApi(EWrapper):
 
         #  订阅tick数据并创建tick对象缓冲区
         self.reqid += 1
+        self.gateway.write_log(f"api订阅前reqid：{self.reqid},symbol:{req.symbol}")
         # self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])# lance
         self.client.reqMktData(self.reqid, ib_contract, "588", False, False, [])# lance
         # self.client.reqMktData(self.reqid, ib_contract, "588", True, False, [])# lance 取主力合约无需保持订阅
@@ -1060,66 +1056,66 @@ class IbApi(EWrapper):
         tick.extra = {}
 
         self.ticks[self.reqid] = tick
-    '''
+        self.gateway.write_log(f"api订阅后reqid：{self.reqid},symbol:{req.symbol}")
 
-    def subscribeRunner(self) -> None:
-        while self.status:
-            try:
-                # self.gateway.write_log(f"订阅行情队列{self.subscribeRequest_queue.qsize()}")
-
-                if not self.status:
-                    continue
-
-                if not self.data_ready:
-                    continue
-
-                req: SubscribeRequest = self.subscribeRequest_queue.get(block=True, timeout=1)
-                if req.exchange not in EXCHANGE_VT2IB:
-                    self.gateway.write_log(f"订阅行情{req.symbol}失败，不支持的交易所{req.exchange}")
-                    continue
-
-                if " " in req.symbol and "-" not in req.symbol:
-                    self.gateway.write_log("订阅失败，合约代码中包含空格")
-                    return
-
-                # 过滤重复订阅
-                if req.vt_symbol in self.subscribed:
-                    continue
-                self.subscribed[req.vt_symbol] = req
-
-                # 解析IB合约详情
-                ib_contract: Contract = generate_ib_contract(req.symbol, req.exchange)
-                if not ib_contract:
-                    self.gateway.write_log(f"订阅行情{req.symbol}失败。代码解析失败，请检查格式是否正确")
-                    continue
-
-                # 通过TWS查询合约信息
-                self.reqid += 1
-                self.client.reqContractDetails(self.reqid, ib_contract)
-
-                # 如果使用了字符串风格的代码，则需要缓存
-                # if "-" in req.symbol:# 只使用数字代码 lance
-                #     self.reqid_symbol_map[self.reqid] = req.symbol
-
-                #  订阅tick数据并创建tick对象缓冲区
-                self.reqid += 1
-                self.gateway.write_log(f"api订阅前reqid：{self.reqid},symbol:{req.symbol}")
-                # self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])# lance
-                self.client.reqMktData(self.reqid, ib_contract, "588", False, False, [])# lance
-                # self.client.reqMktData(self.reqid, ib_contract, "588", True, False, [])# lance 取主力合约无需保持订阅
-
-                tick: TickData = TickData(
-                    symbol=req.symbol,
-                    exchange=req.exchange,
-                    datetime=datetime.now(LOCAL_TZ),
-                    gateway_name=self.gateway_name
-                )
-                tick.extra = {}
-                self.ticks[self.reqid] = tick
-                self.gateway.write_log(f"api订阅后reqid：{self.reqid},symbol:{req.symbol}")
-
-            except Empty:
-                pass
+    # def subscribeRunner(self) -> None:
+    #     while self.status:
+    #         try:
+    #             # self.gateway.write_log(f"订阅行情队列{self.subscribeRequest_queue.qsize()}")
+    #
+    #             if not self.status:
+    #                 continue
+    #
+    #             if not self.data_ready:
+    #                 continue
+    #
+    #             req: SubscribeRequest = self.subscribeRequest_queue.get(block=True, timeout=1)
+    #             if req.exchange not in EXCHANGE_VT2IB:
+    #                 self.gateway.write_log(f"订阅行情{req.symbol}失败，不支持的交易所{req.exchange}")
+    #                 continue
+    #
+    #             if " " in req.symbol and "-" not in req.symbol:
+    #                 self.gateway.write_log("订阅失败，合约代码中包含空格")
+    #                 return
+    #
+    #             # 过滤重复订阅
+    #             if req.vt_symbol in self.subscribed:
+    #                 continue
+    #             self.subscribed[req.vt_symbol] = req
+    #
+    #             # 解析IB合约详情
+    #             ib_contract: Contract = generate_ib_contract(req.symbol, req.exchange)
+    #             if not ib_contract:
+    #                 self.gateway.write_log(f"订阅行情{req.symbol}失败。代码解析失败，请检查格式是否正确")
+    #                 continue
+    #
+    #             # 通过TWS查询合约信息
+    #             self.reqid += 1
+    #             self.client.reqContractDetails(self.reqid, ib_contract)
+    #
+    #             # 如果使用了字符串风格的代码，则需要缓存
+    #             # if "-" in req.symbol:# 只使用数字代码 lance
+    #             #     self.reqid_symbol_map[self.reqid] = req.symbol
+    #
+    #             #  订阅tick数据并创建tick对象缓冲区
+    #             self.reqid += 1
+    #             self.gateway.write_log(f"api订阅前reqid：{self.reqid},symbol:{req.symbol}")
+    #             # self.client.reqMktData(self.reqid, ib_contract, "", False, False, [])# lance
+    #             self.client.reqMktData(self.reqid, ib_contract, "588", False, False, [])# lance
+    #             # self.client.reqMktData(self.reqid, ib_contract, "588", True, False, [])# lance 取主力合约无需保持订阅
+    #
+    #             tick: TickData = TickData(
+    #                 symbol=req.symbol,
+    #                 exchange=req.exchange,
+    #                 datetime=datetime.now(LOCAL_TZ),
+    #                 gateway_name=self.gateway_name
+    #             )
+    #             tick.extra = {}
+    #             self.ticks[self.reqid] = tick
+    #             self.gateway.write_log(f"api订阅后reqid：{self.reqid},symbol:{req.symbol}")
+    #
+    #         except Empty:
+    #             pass
 
     def send_order(self, req: OrderRequest) -> str:
         """委托下单"""
@@ -1206,8 +1202,6 @@ class IbApi(EWrapper):
         end_str: str = end.strftime("%Y%m%d %H:%M:%S") + " " + get_localzone_name()
 
         delta: timedelta = end - req.start
-        # days: int = min(delta.days, 180)     # IB 只提供6个月数据
-        # duration: str = f"{days} D"
         days: int = delta.days
         if days < 365:
             duration: str = f"{days} D"
