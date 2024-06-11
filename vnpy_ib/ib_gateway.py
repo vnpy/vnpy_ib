@@ -292,7 +292,8 @@ class IbApi(EWrapper):
         self.history_condition: Condition = Condition()
         self.history_buf: list[BarData] = []
 
-        self.reqid_symbol_map: dict[int, str] = {}
+        self.reqid_symbol_map: dict[int, str] = {}              # reqid: subscribe tick symbol
+        self.reqid_underlying_map: dict[int, Contract] = {}     # reqid: query option underlying
 
         self.client: EClient = EClient(self)
 
@@ -660,6 +661,11 @@ class IbApi(EWrapper):
         else:
             symbol: str = str(ib_contract.conId)
 
+        # 过滤不支持的类型
+        product: Product = PRODUCT_IB2VT.get(ib_contract.secType, None)
+        if not product:
+            return
+
         # 生成合约
         contract: ContractData = ContractData(
             symbol=symbol,
@@ -690,6 +696,25 @@ class IbApi(EWrapper):
 
             self.contracts[contract.vt_symbol] = contract
             self.ib_contracts[contract.vt_symbol] = ib_contract
+
+    def contractDetailsEnd(self, reqId: int) -> None:
+        """合约数据更新结束回报"""
+        super().contractDetailsEnd(reqId)
+
+        # 只需要对期权查询做处理
+        underlying: Contract = self.reqid_underlying_map.get(reqId, None)
+        if not underlying:
+            return
+
+        # 输出日志信息
+        symbol: str = self.generate_symbol(underlying)
+        exchange: Exchange = EXCHANGE_IB2VT.get(underlying.exchange, Exchange.SMART)
+        vt_symbol: str = f"{symbol}.{exchange.value}"
+
+        self.gateway.write_log(f"{vt_symbol}期权链查询成功")
+
+        # 保存期权合约到文件
+        self.save_contract_data()
 
     def execDetails(self, reqId: int, contract: Contract, execution: Execution) -> None:
         """交易数据更新回报"""
@@ -855,6 +880,9 @@ class IbApi(EWrapper):
         # 通过TWS查询合约信息
         self.reqid += 1
         self.client.reqContractDetails(self.reqid, ib_contract)
+
+        # 缓存查询记录
+        self.reqid_underlying_map[self.reqid] = underlying
 
     def subscribe(self, req: SubscribeRequest) -> None:
         """订阅tick数据更新"""
