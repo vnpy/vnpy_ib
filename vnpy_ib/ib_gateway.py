@@ -999,7 +999,10 @@ class IbApi(EWrapper):
         else:
             end: datetime = datetime.now(LOCAL_TZ)
 
-        end_str: str = end.strftime("%Y%m%d %H:%M:%S") + " " + get_localzone_name()
+        # 使用UTC结束时间戳
+        utc_tz: ZoneInfo = ZoneInfo("utc")
+        utc_end: datetime = end.astimezone(utc_tz)
+        end_str: str = utc_end.strftime("%Y%m%d-%H:%M:%S")
 
         delta: timedelta = end - req.start
         days: int = delta.days
@@ -1030,7 +1033,7 @@ class IbApi(EWrapper):
         )
 
         self.history_condition.acquire()    # 等待异步数据返回
-        self.history_condition.wait(60)
+        self.history_condition.wait(600)
         self.history_condition.release()
 
         history: list[BarData] = self.history_buf
