@@ -547,16 +547,19 @@ class IbApi(EWrapper):
         else:
             dt: datetime = datetime.now()
 
-        order: OrderData = OrderData(
-            symbol=self.generate_symbol(ib_contract),
-            exchange=EXCHANGE_IB2VT.get(ib_contract.exchange, Exchange.SMART),
-            type=ORDERTYPE_IB2VT[ib_order.orderType],
-            orderid=orderid,
-            direction=DIRECTION_IB2VT[ib_order.action],
-            volume=ib_order.totalQuantity,
-            datetime=dt,
-            gateway_name=self.gateway_name,
-        )
+        # 优先使用本地缓存的委托记录，解决交易所传SMART时，返回数据的交易所可能发生变化的问题
+        order: OrderData = self.orders.get(orderid, None)
+        if not order:
+            order: OrderData = OrderData(
+                symbol=self.generate_symbol(ib_contract),
+                exchange=EXCHANGE_IB2VT.get(ib_contract.exchange, Exchange.SMART),
+                type=ORDERTYPE_IB2VT[ib_order.orderType],
+                orderid=orderid,
+                direction=DIRECTION_IB2VT[ib_order.action],
+                volume=ib_order.totalQuantity,
+                datetime=dt,
+                gateway_name=self.gateway_name,
+            )
 
         if order.type == OrderType.LIMIT:
             order.price = ib_order.lmtPrice
@@ -971,6 +974,7 @@ class IbApi(EWrapper):
         self.client.reqIds(1)
 
         order: OrderData = req.create_order_data(str(self.orderid), self.gateway_name)
+        self.orders[order.orderid] = order
         self.gateway.on_order(order)
         return order.vt_orderid
 
