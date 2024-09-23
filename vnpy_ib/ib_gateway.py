@@ -723,6 +723,7 @@ class IbApi(EWrapper):
         """交易数据更新回报"""
         super().execDetails(reqId, contract, execution)
 
+        # 解析成交时间
         time_str: str = execution.time
         time_split: list = time_str.split(" ")
         words_count: int = 3
@@ -743,10 +744,22 @@ class IbApi(EWrapper):
         if tz != LOCAL_TZ:
             dt = dt.astimezone(LOCAL_TZ)
 
+        # 优先使用本地缓存的委托记录，解决交易所传SMART时，返回数据的交易所可能发生变化的问题
+        orderid: str = str(execution.orderId)
+        order: OrderData = self.orders.get(orderid, None)
+
+        if order:
+            symbol: str = order.symbol
+            exchange: Exchange = order.exchange
+        else:
+            symbol: str = self.generate_symbol(contract)
+            exchange: Exchange = EXCHANGE_IB2VT.get(contract.exchange, Exchange.SMART)
+
+        # 推送成交数据
         trade: TradeData = TradeData(
-            symbol=self.generate_symbol(contract),
-            exchange=EXCHANGE_IB2VT.get(contract.exchange, Exchange.SMART),
-            orderid=str(execution.orderId),
+            symbol=symbol,
+            exchange=exchange,
+            orderid=orderid,
             tradeid=str(execution.execId),
             direction=DIRECTION_IB2VT[execution.side],
             price=execution.price,
