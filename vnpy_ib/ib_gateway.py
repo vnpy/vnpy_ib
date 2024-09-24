@@ -55,7 +55,7 @@ from vnpy.trader.constant import (
     OptionType,
     Interval
 )
-from vnpy.trader.utility import get_file_path, ZoneInfo
+from vnpy.trader.utility import get_file_path, ZoneInfo, round_to
 from vnpy.trader.event import EVENT_TIMER
 from vnpy.event import Event
 
@@ -97,8 +97,10 @@ EXCHANGE_VT2IB: dict[Exchange, str] = {
     Exchange.CBOE: "CBOE",
     Exchange.ICE: "ICE",
     Exchange.SEHK: "SEHK",
-    Exchange.SSE: "SEHKNTL",
-    Exchange.SZSE: "SEHKSZSE",
+    # Exchange.SSE: "SEHKNTL",
+    Exchange.SEHKNTL: "SEHKNTL",
+    # Exchange.SZSE: "SEHKSZSE",
+    Exchange.SEHKSZSE: "SEHKSZSE",
     Exchange.HKFE: "HKFE",
     Exchange.CFE: "CFE",
     Exchange.TSE: "TSE",
@@ -114,6 +116,23 @@ EXCHANGE_VT2IB: dict[Exchange, str] = {
     Exchange.OTC: "PINK",
     Exchange.SGX: "SGX",
     Exchange.EUREX: "EUREX",
+    Exchange.SNFE: "SNFE",
+    Exchange.LMEOTC: "LMEOTC",
+    Exchange.NYBOT: "NYBOT",
+    Exchange.IPE: "IPE",
+    Exchange.TWSE: "TWSE",
+    # OSE.JPN
+    Exchange.OSEJPN: "OSE.JPN",
+    Exchange.NSE: "NSE",
+    Exchange.MEFFRV: "MEFFRV",
+    Exchange.MONEP: "MONEP",
+    Exchange.IDEM: "IDEM",
+    Exchange.KSE: "KSE",
+    Exchange.SEHKSTAR: "SEHKSTAR",
+    Exchange.MOEX: "MOEX",
+    Exchange.OMS: "OMS",
+    Exchange.ICEEU: "ICEEU",
+    Exchange.MEXI: "MEXI",
 }
 EXCHANGE_IB2VT: dict[str, Exchange] = {v: k for k, v in EXCHANGE_VT2IB.items()}
 
@@ -330,13 +349,7 @@ class IbApi(EWrapper):
         msg: str = f"服务器时间: {time_string}"
         self.gateway.write_log(msg)
 
-    def error(
-        self,
-        reqId: TickerId,
-        errorCode: int,
-        errorString: str,
-        advancedOrderRejectJson: str = ""
-    ) -> None:
+    def error(self, reqId: TickerId, errorCode: int, errorString: str, advancedOrderRejectJson: str = "") -> None:
         """具体错误请求回报"""
         super().error(reqId, errorCode, errorString)
 
@@ -384,7 +397,10 @@ class IbApi(EWrapper):
         if tick.exchange == Exchange.IDEALPRO or "CMDTY" in tick.symbol:
             if not tick.bid_price_1 or not tick.ask_price_1:
                 return
-            tick.last_price = (tick.bid_price_1 + tick.ask_price_1) / 2
+            price_tick: float = 0.00001
+            if contract and contract.pricetick:
+                price_tick = contract.pricetick
+            tick.last_price = round_to((tick.bid_price_1 + tick.ask_price_1) / 2, price_tick)
             tick.datetime = datetime.now(LOCAL_TZ)
 
         self.gateway.on_tick(copy(tick))
@@ -624,9 +640,9 @@ class IbApi(EWrapper):
             return
 
         try:
-            ib_size: int = int(contract.multiplier)
+            ib_size: float = float(contract.multiplier)
         except ValueError:
-            ib_size = 1
+            ib_size = 1.
         price = averageCost / ib_size
 
         pos: PositionData = PositionData(
@@ -655,7 +671,7 @@ class IbApi(EWrapper):
 
         # 处理合约乘数为0的情况
         if not ib_contract.multiplier:
-            ib_contract.multiplier = 1
+            ib_contract.multiplier = 1.
 
         # 字符串风格的代码，需要从缓存中获取
         if reqId in self.reqid_symbol_map:
@@ -834,13 +850,7 @@ class IbApi(EWrapper):
         self.history_condition.notify()
         self.history_condition.release()
 
-    def connect(
-        self,
-        host: str,
-        port: int,
-        clientid: int,
-        account: str
-    ) -> None:
+    def connect(self, host: str, port: int, clientid: int, account: str) -> None:
         """连接TWS"""
         if self.status:
             return
@@ -906,7 +916,7 @@ class IbApi(EWrapper):
             return
 
         if req.exchange not in EXCHANGE_VT2IB:
-            self.gateway.write_log(f"不支持的交易所{req.exchange}")
+            self.gateway.write_log(f"订阅行情{req.symbol}失败，不支持的交易所{req.exchange}")
             return
 
         if " " in req.symbol:
@@ -921,7 +931,7 @@ class IbApi(EWrapper):
         # 解析IB合约详情
         ib_contract: Contract = generate_ib_contract(req.symbol, req.exchange)
         if not ib_contract:
-            self.gateway.write_log("代码解析失败，请检查格式是否正确")
+            self.gateway.write_log("订阅行情{req.symbol}失败。代码解析失败，请检查格式是否正确")
             return
 
         # 通过TWS查询合约信息
