@@ -30,7 +30,7 @@ from ibapi.order_state import OrderState
 from ibapi.ticktype import TickType, TickTypeEnum
 from ibapi.wrapper import EWrapper
 from ibapi.common import BarData as IbBarData
-
+from ibapi.order_cancel import OrderCancel
 from vnpy.trader.gateway import BaseGateway
 from vnpy.trader.object import (
     TickData,
@@ -177,9 +177,13 @@ ACCOUNTFIELD_IB2VT: dict[str, str] = {
 
 # 数据频率映射
 INTERVAL_VT2IB: dict[Interval, str] = {
+    Interval.TICK: "1 sec",
     Interval.MINUTE: "1 min",
+    Interval.MINUTE30: "30 mins",
     Interval.HOUR: "1 hour",
     Interval.DAILY: "1 day",
+    Interval.WEEKLY: "1W",
+    Interval.MONTHLY: "1M",
 }
 
 # 其他常量
@@ -758,6 +762,8 @@ class IbApi(EWrapper):
         # 推送成交数据
         trade: TradeData = TradeData(
             symbol=symbol,
+            name=order.name,
+            offset=order.offset,
             exchange=exchange,
             orderid=orderid,
             tradeid=str(execution.execId),
@@ -996,7 +1002,7 @@ class IbApi(EWrapper):
         if not self.status:
             return
 
-        self.client.cancelOrder(int(req.orderid), "")
+        self.client.cancelOrder(int(req.orderid), OrderCancel())
 
     def query_history(self, req: HistoryRequest) -> list[BarData]:
         """查询历史数据"""
