@@ -382,7 +382,7 @@ class IbApi(EWrapper):
             tick.name = contract.name
 
         # 本地计算Forex of IDEALPRO和Spot Commodity的tick时间和最新价格
-        if tick.exchange == Exchange.IDEALPRO or "CMDTY" in tick.symbol:
+        if tick.exchange == Exchange.IDEALPRO or "CMDTY" in tick.symbol or tick.low_price == -1:
             if not tick.bid_price_1 or not tick.ask_price_1:
                 return
             tick.last_price = (tick.bid_price_1 + tick.ask_price_1) / 2
