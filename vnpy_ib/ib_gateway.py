@@ -886,13 +886,16 @@ class IbApi(EWrapper):
         # 解析IB期权合约
         ib_contract: Contract = Contract()
         ib_contract.symbol = underlying.symbol
-        ib_contract.exchange = underlying.exchange
         ib_contract.currency = underlying.currency
 
+        # 期货期权必须使用指定交易所
         if underlying.secType == "FUT":
             ib_contract.secType = "FOP"
+            ib_contract.exchange = underlying.exchange
+        # 现货期权支持智能路由
         else:
             ib_contract.secType = "OPT"
+            ib_contract.exchange = "SMART"
 
         # 通过TWS查询合约信息
         self.reqid += 1
