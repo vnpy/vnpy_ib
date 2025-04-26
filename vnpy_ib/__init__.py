@@ -20,12 +20,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import importlib_metadata
-
 from .ib_gateway import IbGateway
 
 
-try:
-    __version__ = importlib_metadata.version("vnpy_ib")
-except importlib_metadata.PackageNotFoundError:
-    __version__ = "dev"
+__version__ = "10.19.1.12"
+
+
+__all__ = ["IbGateway"]

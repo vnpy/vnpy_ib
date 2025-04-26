@@ -15,7 +15,6 @@ ConId is also supported for symbol.
 from copy import copy
 from datetime import datetime, timedelta
 from threading import Thread, Condition
-from typing import Optional
 from decimal import Decimal
 import shelve
 from tzlocal import get_localzone_name
@@ -208,7 +207,7 @@ class IbGateway(BaseGateway):
         """构造函数"""
         super().__init__(event_engine, gateway_name)
 
-        self.api: "IbApi" = IbApi(self)
+        self.api: IbApi = IbApi(self)
         self.count: int = 0
 
     def connect(self, setting: dict) -> None:
@@ -437,7 +436,7 @@ class IbApi(EWrapper):
         vega: float,
         theta: float,
         undPrice: float
-    ):
+    ) -> None:
         """tick期权数据推送"""
         super().tickOptionComputation(
             reqId,
@@ -546,12 +545,12 @@ class IbApi(EWrapper):
         if ib_order.orderRef:
             dt: datetime = datetime.strptime(ib_order.orderRef, "%Y-%m-%d %H:%M:%S")
         else:
-            dt: datetime = datetime.now()
+            dt = datetime.now()
 
         # 优先使用本地缓存的委托记录，解决交易所传SMART时，返回数据的交易所可能发生变化的问题
         order: OrderData = self.orders.get(orderid, None)
         if not order:
-            order: OrderData = OrderData(
+            order = OrderData(
                 symbol=self.generate_symbol(ib_contract),
                 exchange=EXCHANGE_IB2VT.get(ib_contract.exchange, Exchange.SMART),
                 type=ORDERTYPE_IB2VT[ib_order.orderType],
@@ -615,9 +614,9 @@ class IbApi(EWrapper):
         if contract.exchange:
             exchange: Exchange = EXCHANGE_IB2VT.get(contract.exchange, None)
         elif contract.primaryExchange:
-            exchange: Exchange = EXCHANGE_IB2VT.get(contract.primaryExchange, None)
+            exchange = EXCHANGE_IB2VT.get(contract.primaryExchange, None)
         else:
-            exchange: Exchange = Exchange.SMART   # Use smart routing for default
+            exchange = Exchange.SMART   # Use smart routing for default
 
         if not exchange:
             msg: str = f"存在不支持的交易所持仓：{self.generate_symbol(contract)} {contract.exchange} {contract.primaryExchange}"
@@ -663,7 +662,7 @@ class IbApi(EWrapper):
             symbol: str = self.reqid_symbol_map[reqId]
         # 否则默认使用数字风格代码
         else:
-            symbol: str = str(ib_contract.conId)
+            symbol = str(ib_contract.conId)
 
         # 过滤不支持的类型
         product: Product = PRODUCT_IB2VT.get(ib_contract.secType, None)
@@ -740,7 +739,7 @@ class IbApi(EWrapper):
             return
 
         dt: datetime = datetime.strptime(time_str, "%Y%m%d %H:%M:%S")
-        dt: datetime = dt.replace(tzinfo=tz)
+        dt = dt.replace(tzinfo=tz)
 
         if tz != LOCAL_TZ:
             dt = dt.astimezone(LOCAL_TZ)
@@ -753,8 +752,8 @@ class IbApi(EWrapper):
             symbol: str = order.symbol
             exchange: Exchange = order.exchange
         else:
-            symbol: str = self.generate_symbol(contract)
-            exchange: Exchange = EXCHANGE_IB2VT.get(contract.exchange, Exchange.SMART)
+            symbol = self.generate_symbol(contract)
+            exchange = EXCHANGE_IB2VT.get(contract.exchange, Exchange.SMART)
 
         # 推送成交数据
         trade: TradeData = TradeData(
@@ -806,11 +805,11 @@ class IbApi(EWrapper):
         if ":" in time_str:
             dt: datetime = datetime.strptime(time_str, "%Y%m%d %H:%M:%S")
         else:
-            dt: datetime = datetime.strptime(time_str, "%Y%m%d")
-        dt: datetime = dt.replace(tzinfo=tz)
+            dt = datetime.strptime(time_str, "%Y%m%d")
+        dt = dt.replace(tzinfo=tz)
 
         if tz != LOCAL_TZ:
-            dt: datetime = dt.astimezone(LOCAL_TZ)
+            dt = dt.astimezone(LOCAL_TZ)
 
         bar: BarData = BarData(
             symbol=self.history_req.symbol,
@@ -993,7 +992,7 @@ class IbApi(EWrapper):
         order: OrderData = req.create_order_data(str(self.orderid), self.gateway_name)
         self.orders[order.orderid] = order
         self.gateway.on_order(order)
-        return order.vt_orderid
+        return order.vt_orderid     # type: ignore
 
     def cancel_order(self, req: CancelRequest) -> None:
         """委托撤单"""
@@ -1018,7 +1017,7 @@ class IbApi(EWrapper):
         if req.end:
             end: datetime = req.end
         else:
-            end: datetime = datetime.now(LOCAL_TZ)
+            end = datetime.now(LOCAL_TZ)
 
         # 使用UTC结束时间戳
         utc_tz: ZoneInfo = ZoneInfo("utc")
@@ -1030,14 +1029,14 @@ class IbApi(EWrapper):
         if days < 365:
             duration: str = f"{days} D"
         else:
-            duration: str = f"{delta.days/365:.0f} Y"
+            duration = f"{delta.days/365:.0f} Y"
 
         bar_size: str = INTERVAL_VT2IB[req.interval]
 
         if contract.product in [Product.SPOT, Product.FOREX]:
             bar_type: str = "MIDPOINT"
         else:
-            bar_type: str = "TRADES"
+            bar_type = "TRADES"
 
         self.history_reqid = self.reqid
         self.client.reqHistoricalData(
@@ -1058,8 +1057,8 @@ class IbApi(EWrapper):
         self.history_condition.release()
 
         history: list[BarData] = self.history_buf
-        self.history_buf: list[BarData] = []       # 创新新的缓冲列表
-        self.history_req: HistoryRequest = None
+        self.history_buf = []       # 创新新的缓冲列表
+        self.history_req = None
 
         return history
 
@@ -1161,7 +1160,7 @@ class IbApi(EWrapper):
         self.client.cancelMktData(cancel_id)
 
 
-def generate_ib_contract(symbol: str, exchange: Exchange) -> Optional[Contract]:
+def generate_ib_contract(symbol: str, exchange: Exchange) -> Contract | None:
     """生产IB合约"""
     # 字符串代码
     if "-" in symbol:
@@ -1190,7 +1189,7 @@ def generate_ib_contract(symbol: str, exchange: Exchange) -> Optional[Contract]:
     # 数字代码（ConId）
     else:
         if symbol.isdigit():
-            ib_contract: Contract = Contract()
+            ib_contract = Contract()
             ib_contract.exchange = EXCHANGE_VT2IB[exchange]
             ib_contract.conId = symbol
         else:
