@@ -1022,7 +1022,7 @@ class IbApi(EWrapper):
             end = datetime.now(LOCAL_TZ)
 
         # 使用UTC结束时间戳
-        utc_tz: ZoneInfo = ZoneInfo("utc")
+        utc_tz: ZoneInfo = ZoneInfo("UTC")
         utc_end: datetime = end.astimezone(utc_tz)
         end_str: str = utc_end.strftime("%Y%m%d-%H:%M:%S")
 
