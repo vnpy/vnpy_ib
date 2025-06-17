@@ -29,6 +29,7 @@ from ibapi.order_state import OrderState
 from ibapi.ticktype import TickType, TickTypeEnum
 from ibapi.wrapper import EWrapper
 from ibapi.common import BarData as IbBarData
+from ibapi.order_cancel import OrderCancel
 
 from vnpy.trader.gateway import BaseGateway
 from vnpy.trader.object import (
@@ -999,7 +1000,8 @@ class IbApi(EWrapper):
         if not self.status:
             return
 
-        self.client.cancelOrder(int(req.orderid), "")
+        cancel: OrderCancel = OrderCancel()
+        self.client.cancelOrder(int(req.orderid), cancel)
 
     def query_history(self, req: HistoryRequest) -> list[BarData]:
         """查询历史数据"""
@@ -1020,7 +1022,7 @@ class IbApi(EWrapper):
             end = datetime.now(LOCAL_TZ)
 
         # 使用UTC结束时间戳
-        utc_tz: ZoneInfo = ZoneInfo("utc")
+        utc_tz: ZoneInfo = ZoneInfo("UTC")
         utc_end: datetime = end.astimezone(utc_tz)
         end_str: str = utc_end.strftime("%Y%m%d-%H:%M:%S")
 
