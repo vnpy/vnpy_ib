@@ -19,6 +19,7 @@ classifiers = [
     "Natural Language :: Chinese (Simplified)",
 ]
 requires-python = ">=3.10"
+dependencies = ["protobuf==5.29.3"]
 keywords = ["quant", "quantitative", "investment", "trading", "algotrading"]
 
 [project.urls]
