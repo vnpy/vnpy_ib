@@ -1194,7 +1194,7 @@ def generate_ib_contract(symbol: str, exchange: Exchange) -> Contract | None:
         if symbol.isdigit():
             ib_contract = Contract()
             ib_contract.exchange = EXCHANGE_VT2IB[exchange]
-            ib_contract.conId = symbol
+            ib_contract.conId = int(symbol)
         else:
             ib_contract = None
 
