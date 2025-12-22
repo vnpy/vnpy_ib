@@ -14,7 +14,7 @@ ConId is also supported for symbol.
 
 from copy import copy
 from datetime import datetime, timedelta
-from threading import Thread, Condition
+from threading import Thread, Condition, Lock
 from decimal import Decimal
 import shelve
 from tzlocal import get_localzone_name
@@ -292,6 +292,7 @@ class IbApi(EWrapper):
         self.history_req: HistoryRequest = None
         self.history_condition: Condition = Condition()
         self.history_buf: list[BarData] = []
+        self.history_lock: Lock = Lock()
 
         self.reqid_symbol_map: dict[int, str] = {}              # reqid: subscribe tick symbol
         self.reqid_underlying_map: dict[int, Contract] = {}     # reqid: query option underlying
@@ -786,6 +787,10 @@ class IbApi(EWrapper):
 
     def historicalData(self, reqId: int, ib_bar: IbBarData) -> None:
         """历史数据更新回报"""
+        # 安全检查：忽略无效或延迟的回调
+        if self.history_req is None or reqId != self.history_reqid:
+            return
+
         # 日级别数据和周级别日期数据的数据形式为%Y%m%d
         time_str: str = ib_bar.date
         time_split: list = time_str.split(" ")
@@ -832,6 +837,10 @@ class IbApi(EWrapper):
 
     def historicalDataEnd(self, reqId: int, start: str, end: str) -> None:
         """历史数据查询完毕回报"""
+        # 安全检查：忽略无效或延迟的回调
+        if reqId != self.history_reqid:
+            return
+
         self.history_condition.acquire()
         self.history_condition.notify()
         self.history_condition.release()
@@ -1006,64 +1015,65 @@ class IbApi(EWrapper):
 
     def query_history(self, req: HistoryRequest) -> list[BarData]:
         """查询历史数据"""
-        contract: ContractData = self.contracts[req.vt_symbol]
+        contract: ContractData | None = self.contracts.get(req.vt_symbol, None)
         if not contract:
             self.gateway.write_log(f"找不到合约：{req.vt_symbol}，请先订阅")
             return []
 
-        self.history_req = req
+        # 使用锁确保同一时刻只有一个查询
+        with self.history_lock:
+            self.history_req = req
+            self.reqid += 1
 
-        self.reqid += 1
+            ib_contract: Contract = generate_ib_contract(req.symbol, req.exchange)
 
-        ib_contract: Contract = generate_ib_contract(req.symbol, req.exchange)
+            if req.end:
+                end: datetime = req.end
+            else:
+                end = datetime.now(LOCAL_TZ)
 
-        if req.end:
-            end: datetime = req.end
-        else:
-            end = datetime.now(LOCAL_TZ)
+            # 使用UTC结束时间戳
+            utc_tz: ZoneInfo = ZoneInfo("UTC")
+            utc_end: datetime = end.astimezone(utc_tz)
+            end_str: str = utc_end.strftime("%Y%m%d-%H:%M:%S")
 
-        # 使用UTC结束时间戳
-        utc_tz: ZoneInfo = ZoneInfo("UTC")
-        utc_end: datetime = end.astimezone(utc_tz)
-        end_str: str = utc_end.strftime("%Y%m%d-%H:%M:%S")
+            delta: timedelta = end - req.start
+            days: int = delta.days
+            if days < 365:
+                duration: str = f"{days} D"
+            else:
+                duration = f"{delta.days/365:.0f} Y"
 
-        delta: timedelta = end - req.start
-        days: int = delta.days
-        if days < 365:
-            duration: str = f"{days} D"
-        else:
-            duration = f"{delta.days/365:.0f} Y"
+            bar_size: str = INTERVAL_VT2IB[req.interval]
 
-        bar_size: str = INTERVAL_VT2IB[req.interval]
+            if contract.product in [Product.SPOT, Product.FOREX]:
+                bar_type: str = "MIDPOINT"
+            else:
+                bar_type = "TRADES"
 
-        if contract.product in [Product.SPOT, Product.FOREX]:
-            bar_type: str = "MIDPOINT"
-        else:
-            bar_type = "TRADES"
+            self.history_reqid = self.reqid
+            self.client.reqHistoricalData(
+                self.reqid,
+                ib_contract,
+                end_str,
+                duration,
+                bar_size,
+                bar_type,
+                0,
+                1,
+                False,
+                []
+            )
 
-        self.history_reqid = self.reqid
-        self.client.reqHistoricalData(
-            self.reqid,
-            ib_contract,
-            end_str,
-            duration,
-            bar_size,
-            bar_type,
-            0,
-            1,
-            False,
-            []
-        )
+            self.history_condition.acquire()    # 等待异步数据返回
+            self.history_condition.wait(600)
+            self.history_condition.release()
 
-        self.history_condition.acquire()    # 等待异步数据返回
-        self.history_condition.wait(600)
-        self.history_condition.release()
+            history: list[BarData] = self.history_buf
+            self.history_buf = []       # 创建新的缓冲列表
+            self.history_req = None
 
-        history: list[BarData] = self.history_buf
-        self.history_buf = []       # 创新新的缓冲列表
-        self.history_req = None
-
-        return history
+            return history
 
     def load_contract_data(self) -> None:
         """加载本地合约数据"""
