@@ -23,7 +23,7 @@
 from .ib_gateway import IbGateway
 
 
-__version__ = "10.40.1.2"
+__version__ = "10.45.1.0"
 
 
 __all__ = ["IbGateway"]

@@ -994,6 +994,7 @@ class IbApi(EWrapper):
         ib_order.totalQuantity = Decimal(req.volume)
         ib_order.account = self.account
         ib_order.orderRef = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ib_order.tif = "DAY"
 
         if req.type == OrderType.LIMIT:
             ib_order.lmtPrice = req.price

@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-    <img src ="https://img.shields.io/badge/version-10.40.1.2-blueviolet.svg"/>
+    <img src ="https://img.shields.io/badge/version-10.45.1.0-blueviolet.svg"/>
     <img src ="https://img.shields.io/badge/platform-windows|linux|macos-yellow.svg"/>
     <img src ="https://img.shields.io/badge/python-3.10|3.11|3.12|3.13-blue.svg" />
     <img src ="https://img.shields.io/github/license/vnpy/vnpy.svg?color=orange"/>
@@ -13,7 +13,7 @@
 
 ## 说明
 
-基于ibapi的10.40.1版本开发的InteractiveBrokers交易接口。
+基于ibapi的10.45.1版本开发的InteractiveBrokers交易接口。
 
 IbGateway中的合约代码支持两种风格：数字代码和字符串代码。
 
@@ -34,7 +34,7 @@ IbGateway中的合约代码支持两种风格：数字代码和字符串代码�
 
 ## 安装
 
-安装环境推荐基于4.0.0版本以上的【[**VeighNa Studio**](https://www.vnpy.com)】。
+安装环境推荐基于4.4.0版本以上的【[**VeighNa Studio**](https://www.vnpy.com)】。
 
 ### 安装ibapi
 
