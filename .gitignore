@@ -129,3 +129,6 @@ dmypy.json
 .pyre/
 .vscode/settings.json
 .idea
+
+# Type checker / linter / test caches
+.ruff_cache/

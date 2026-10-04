@@ -44,7 +44,7 @@ include-package-data = true
 include = ["vnpy_ib*"] 
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py313"
 output-format = "full"
 
 [tool.ruff.lint]
@@ -58,7 +58,7 @@ select = [
 ignore = ["E501"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
