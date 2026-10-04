@@ -41,18 +41,24 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install uv
           pip install "mypy==1.19.1" "ruff==0.14.1" pytest
 
       - name: Install ta-lib and vnpy
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
-            uv pip install "ta-lib==0.6.4" --index https://pypi.vnpy.com --system
+            python -m pip install "ta-lib==0.6.4" --index-url https://pypi.vnpy.com
           else
             python -m pip install "ta-lib==0.6.4"
           fi
-          python -m pip install "vnpy==4.4.0" "ibapi==10.45.1"
+          python -m pip install "vnpy==4.4.0"
+
+      - name: Install IB API pythonclient
+        shell: bash
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/twsapi_macunix.1045.01.zip" "https://interactivebrokers.github.io/downloads/twsapi_macunix.1045.01.zip"
+          python -m zipfile -e "$RUNNER_TEMP/twsapi_macunix.1045.01.zip" "$RUNNER_TEMP/twsapi"
+          python -m pip install "$RUNNER_TEMP/twsapi/IBJts/source/pythonclient"
 
       - name: Install package
         run: pip install -e .
