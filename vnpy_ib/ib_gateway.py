@@ -184,7 +184,7 @@ INTERVAL_VT2IB: dict[Interval, str] = {
 }
 
 # 其他常量
-LOCAL_TZ = ZoneInfo(get_localzone_name())
+LOCAL_TZ: ZoneInfo = ZoneInfo(get_localzone_name())
 JOIN_SYMBOL: str = "-"
 
 
@@ -360,6 +360,7 @@ class IbApi(EWrapper):
 
             reqs: list = list(self.subscribed.values())
             self.subscribed.clear()
+            req: SubscribeRequest
             for req in reqs:
                 self.subscribe(req)
 
@@ -633,7 +634,7 @@ class IbApi(EWrapper):
             ib_size: int = int(contract.multiplier)
         except ValueError:
             ib_size = 1
-        price = averageCost / ib_size
+        price: float = averageCost / ib_size
 
         pos: PositionData = PositionData(
             symbol=self.generate_symbol(contract),
@@ -649,6 +650,7 @@ class IbApi(EWrapper):
     def updateAccountTime(self, timeStamp: str) -> None:
         """账号更新时间回报"""
         super().updateAccountTime(timeStamp)
+        account: AccountData
         for account in self.accounts.values():
             self.gateway.on_account(copy(account))
 
@@ -735,9 +737,9 @@ class IbApi(EWrapper):
         words_count: int = 3
 
         if len(time_split) == words_count:
-            timezone = time_split[-1]
+            timezone: str = time_split[-1]
             time_str = time_str.replace(f" {timezone}", "")
-            tz = ZoneInfo(timezone)
+            tz: ZoneInfo = ZoneInfo(timezone)
         elif len(time_split) == (words_count - 1):
             tz = LOCAL_TZ
         else:
@@ -781,6 +783,7 @@ class IbApi(EWrapper):
         super().managedAccounts(accountsList)
 
         if not self.account:
+            account_code: str
             for account_code in accountsList.split(","):
                 if account_code:
                     self.account = account_code
@@ -803,9 +806,9 @@ class IbApi(EWrapper):
             words_count -= 1
 
         if len(time_split) == words_count:
-            timezone = time_split[-1]
+            timezone: str = time_split[-1]
             time_str = time_str.replace(f" {timezone}", "")
-            tz = ZoneInfo(timezone)
+            tz: ZoneInfo = ZoneInfo(timezone)
         elif len(time_split) == (words_count - 1):
             tz = LOCAL_TZ
         else:
@@ -859,13 +862,13 @@ class IbApi(EWrapper):
         if self.status:
             return
 
-        self.host = host
-        self.port = port
+        self.host: str = host
+        self.port: int = port
         self.clientid = clientid
         self.account = account
 
         self.client.connect(host, port, clientid)
-        self.thread = Thread(target=self.client.run)
+        self.thread: Thread = Thread(target=self.client.run)
         self.thread.start()
 
     def check_connection(self) -> None:
@@ -1085,11 +1088,12 @@ class IbApi(EWrapper):
 
     def load_contract_data(self) -> None:
         """加载本地合约数据"""
-        f = shelve.open(self.data_filepath)
+        f: shelve.Shelf = shelve.open(self.data_filepath)
         self.contracts = f.get("contracts", {})
         self.ib_contracts = f.get("ib_contracts", {})
         f.close()
 
+        contract: ContractData
         for contract in self.contracts.values():
             self.gateway.on_contract(contract)
 
@@ -1099,12 +1103,14 @@ class IbApi(EWrapper):
         """保存合约数据至本地"""
         # 保存前确保所有合约数据接口名称为IB，避免其他模块的处理影响
         contracts: dict[str, ContractData] = {}
+        vt_symbol: str
+        contract: ContractData
         for vt_symbol, contract in self.contracts.items():
             c: ContractData = copy(contract)
             c.gateway_name = "IB"
             contracts[vt_symbol] = c
 
-        f = shelve.open(self.data_filepath)
+        f: shelve.Shelf = shelve.open(self.data_filepath)
         f["contracts"] = contracts
         f["ib_contracts"] = self.ib_contracts
         f.close()
@@ -1172,6 +1178,8 @@ class IbApi(EWrapper):
 
         # 获取订阅号
         cancel_id: int = 0
+        reqid: int
+        tick: TickData
         for reqid, tick in self.ticks.items():
             if tick.vt_symbol == req.vt_symbol:
                 cancel_id = reqid
