@@ -24,7 +24,7 @@
 from .ib_gateway import IbGateway
 
 
-__version__ = "10.45.1.0"
+__version__ = "10.45.1.1"
 
 
 __all__ = ["IbGateway"]
